@@ -1,0 +1,185 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Google Maps - Echte Kollisionsprüfung</title>
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=INSERT_API_KEY_HERE&libraries=drawing,geometry"></script>
+    <style>
+      #map {
+        height: 500px;
+        width: 100%;
+      }
+      #message {
+        color: white;
+        background: #333;
+        padding: 10px;
+        margin-top: 10px;
+        min-height: 20px;
+      }
+      .error {
+        background: #ff4444 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <h3>Präzise Sperrflächen-Prüfung (Turf.js)</h3>
+    <div id="map"></div>
+    <div id="message">Zeichne ein Polygon...</div>
+
+    <script>
+      let map;
+      let drawingManager;
+      let blockingPolygons = [];
+
+      function initMap() {
+        map = new google.maps.Map(document.getElementById("map"), {
+          center: { lat: 52.52, lng: 13.405 },
+          zoom: 15,
+        });
+
+        // Sperrfläche definieren
+        const restrictedCoords = [
+          { lat: 52.522, lng: 13.402 },
+          { lat: 52.522, lng: 13.408 },
+          { lat: 52.518, lng: 13.408 },
+          { lat: 52.518, lng: 13.402 },
+          { lat: 52.522, lng: 13.402 },
+        ];
+
+        // Polygon nur für Rand + Geometrie/Kollisionsprüfung
+        const restrictedArea = new google.maps.Polygon({
+          paths: restrictedCoords,
+          strokeColor: "#000000",
+          strokeWeight: 2,
+          fillOpacity: 0,
+          map: map,
+        });
+
+        // SVG-Muster für gelb-schwarze Schraffur
+        const stripeSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+  <rect width="40" height="40" fill="#FFD700"/>
+  <g stroke="#000000" stroke-width="8">
+    <line x1="-10" y1="40" x2="40" y2="-10" />
+    <line x1="0" y1="50" x2="50" y2="0" />
+    <line x1="10" y1="50" x2="50" y2="10" />
+  </g>
+</svg>`;
+
+        const stripeUrl =
+          "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(stripeSvg);
+
+        const lats = restrictedCoords.map((p) => p.lat);
+        const lngs = restrictedCoords.map((p) => p.lng);
+
+        const overlayBounds = {
+          north: Math.max(...lats),
+          south: Math.min(...lats),
+          east: Math.max(...lngs),
+          west: Math.min(...lngs),
+        };
+
+        const stripedOverlay = new google.maps.GroundOverlay(
+          stripeUrl,
+          overlayBounds,
+          {
+            opacity: 0.75,
+          },
+        );
+        stripedOverlay.setMap(map);
+
+        // Optionaler sichtbarer Rand
+        const dangerBorder = new google.maps.Polyline({
+          path: restrictedCoords,
+          strokeColor: "#000000",
+          strokeOpacity: 1,
+          strokeWeight: 2,
+          map: map,
+        });
+
+        blockingPolygons.push(restrictedArea);
+
+        drawingManager = new google.maps.drawing.DrawingManager({
+          drawingMode: google.maps.drawing.OverlayType.POLYGON,
+          drawingControl: true,
+          drawingControlOptions: {
+            position: google.maps.ControlPosition.TOP_CENTER,
+            drawingModes: ["polygon"],
+          },
+        });
+        drawingManager.setMap(map);
+
+        google.maps.event.addListener(
+          drawingManager,
+          "overlaycomplete",
+          function (event) {
+            if (event.type === google.maps.drawing.OverlayType.POLYGON) {
+              const newPolygon = event.overlay;
+
+              // 1. Google Polygon in Turf.js GeoJSON umwandeln
+              const newGeoJSON = googlePolyToTurf(newPolygon);
+              let hasCollision = false;
+
+              // 2. Gegen alle Sperrflächen prüfen
+              for (let blockPoly of blockingPolygons) {
+                const blockGeoJSON = googlePolyToTurf(blockPoly);
+
+                // Turf Prüfung: Gibt es eine Schnittmenge?
+                const intersection = turf.intersect(newGeoJSON, blockGeoJSON);
+
+                if (intersection) {
+                  hasCollision = true;
+                  break;
+                }
+              }
+
+              if (hasCollision) {
+                showMessage("FEHLER: Überschneidung mit Sperrfläche!", true);
+                newPolygon.setMap(null);
+              } else {
+                showMessage("Erfolgreich gespeichert.", false);
+              }
+            }
+          },
+        );
+
+        // Während der Nutzer die Maus bewegt
+        map.addListener("mousemove", (e) => {
+          debugger;
+          let isInsideRestricted = false;
+
+          blockingPolygons.forEach((poly) => {
+            if (google.maps.geometry.poly.containsLocation(e.latLng, poly)) {
+              isInsideRestricted = true;
+            }
+          });
+
+          if (isInsideRestricted) {
+            // Ändere das Icon des Cursors auf der Karte
+            map.setOptions({ draggableCursor: "not-allowed" });
+            // Optional: Hier könnte man das Zeichnen kurzzeitig pausieren
+          } else {
+            map.setOptions({ draggableCursor: "crosshair" });
+          }
+        });
+      }
+
+      // Hilfsfunktion: Konvertiert Google Maps Polygon zu Turf Polygon
+      function googlePolyToTurf(googlePoly) {
+        const nodes = googlePoly.getPath().getArray();
+        const coords = nodes.map((n) => [n.lng(), n.lat()]);
+        // Turf benötigt den ersten Punkt am Ende erneut zum Schließen des Rings
+        coords.push(coords[0]);
+        return turf.polygon([coords]);
+      }
+
+      function showMessage(msg, isError) {
+        const el = document.getElementById("message");
+        el.innerText = msg;
+        el.className = isError ? "error" : "";
+      }
+
+      google.maps.event.addDomListener(window, "load", initMap);
+    </script>
+  </body>
+</html>
