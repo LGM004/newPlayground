@@ -132,6 +132,13 @@
         // --- Message Handler (Wix Interaktion) ---
         window.onmessage = async (event) => {
             debugger;
+
+// 1. WICHTIG: Filtere Nachrichten, die nicht von dir kommen
+    if (!event.data || (!event.data.actions && !event.data.action)) {
+        // Ignoriere Wix-interne System-Nachrichten
+        return; 
+    }
+            
             const data = event.data;
             const actions = data.actions || (data.action ? [data] : []);
 
