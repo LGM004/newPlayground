@@ -1,1626 +1,230 @@
-<!-- Gesuchskoordinator -->
 <!doctype html>
-<html>
-  <head>
-    <title>SwissInfraKoordinator</title>
-
-    <script
-      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCAa5dcI9tswtlvTpIQHPvsvndUFbiE7vQ&callback=initMap&libraries=drawing,places&v=weekly"
-      defer
-    ></script>
+<html lang="de">
+<head>
+    <meta charset="UTF-8" />
+    <title>SwissInfra Global Map</title>
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.3.2/jspdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.4.1/html2canvas.min.js"></script>
-    <script>
-      const PRO_CORD = "projectcord",
-        SINGLE_PROJ = "singleProj";
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCAa5dcI9tswtlvTpIQHPvsvndUFbiE7vQ&callback=initMap&libraries=drawing,places,geometry&v=weekly" defer></script>
 
-      var infoWindow;
-      var role;
-      this.scenario = PRO_CORD;
-      this.scenario = SINGLE_PROJ; //wichtig: einzige Stelle, die zwischen Übersicht und Detailsicht unterschiedlich ist
-    </script>
-    <style type="text/css">
-      #map {
-        height: 100%;
-      }
-
-      html,
-      body {
-        height: 100%;
-        margin: 0;
-      }
+    <style>
+        html, body, #map { height: 100%; margin: 0; padding: 0; font-family: Roboto, Arial, sans-serif; }
+        #map { background-color: #e5e3df; }
     </style>
-    <script>
-      var EXTENT = [-Math.PI * 6378137, Math.PI * 6378137];
-
-      function xyzToBounds(x, y, z) {
-        var tileSize = (EXTENT[1] * 2) / Math.pow(2, z);
-        var minx = EXTENT[0] + x * tileSize;
-        var maxx = EXTENT[0] + (x + 1) * tileSize;
-        // remember y origin starts at top
-        var miny = EXTENT[1] - (y + 1) * tileSize;
-        var maxy = EXTENT[1] - y * tileSize;
-        return [minx, miny, maxx, maxy];
-      }
-
-      var getTileUrl = function (coordinates, zoom) {
-        return (
-          /*funktioniert
-                    "https://geowms.bl.ch/?version=1.1.1" +
-                    "&REQUEST=GetMap&SERVICE=WMS" +
-                    "&LAYERS=grundkarte_farbig_group" +
-                    "&FORMAT=image%2Fpng" +
-                    "&SRS=EPSG:3857&WIDTH=256&HEIGHT=256" +
-                    "&BBOX=" +
-                    
-                    */
-
-          "https://www.geoportal.ch/services/wms" +
-          "?token=1afa12-59242e6c" +
-          "&primaryAreaForStatistic=laufen&REQUEST=GetMap&SERVICE=WMS&VERSION=1.3.0" +
-          "&FORMAT=image%2Fpng8&STYLES=&TRANSPARENT=true&CRS=EPSG%3A3857" +
-          "&LAYERS=v5207%2Cv6107%2Cv9384%2Cv2693%2Cv2692%2Cv451%2Cv5206%2Cv2722%2Cv315%2Cv2723%2Cv5064" +
-          "&FILTERIDS=include&WIDTH=1534&HEIGHT=941&BBOX=" +
-          /*
-                //funktioniert
-                "https://geo.so.ch/api/wms?version=1.3.0" +
-            "&REQUEST=GetMap&SERVICE=WMS" +
-            "&LAYERS=ch.so.agi.hintergrundkarte_farbig" +
-            "&FORMAT=image%2Fpng" +
-            "&SRS=EPSG:3857&WIDTH=256&HEIGHT=256" +
-            "&BBOX=" + 
-            */
-
-          /*                "https://wms.geo.ag.ch/public/wms?SERVICE=WMS&VERSION=1.3-0"
-                                + "&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&STYLES&LAYERS=public:"
-                                + "ch_ag_geo_alg_landschaftstypen&SRS=EPSG:3857&WIDTH=256&HEIGHT=256&BBOX=" // ch_ag_geo_va_gemeindeef_01
-                                + */
-
-          /* "https://wms.geo.admin.ch/?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0"+
-                 "&LAYERS=ch.bafu.bundesinventare-bln&STYLES=default&CRS=EPSG:2056&WIDTH=256&HEIGHT=256&FORMAT=image/png&BBOX="
-                 +*/
-
-          /*"https://wms.geo.ag.ch/public/ch_ag_geo_kai_schulkr/wms?service=wms&version=1.3.0&request="+
-                "&REQUEST=GetMap&STYLES=default&CRS=EPSG:2056&WIDTH=256&HEIGHT=256&FORMAT=image/png&BBOX=" +*/
-
-          /* "https://wms.geo.ag.ch/public/wms?SERVICE=WMS&VERSION=1.3-0" +
-                 "&REQUEST=GetMap&SERVICE=WMS" +
-                 "&LAYERS=ch_ag_geo_imag_staatsgeb" + //ch_ag_geo_imag_staatsgeb base_landeskarten_sw ch_ag_geo_va_AVWMS
-                 "&FORMAT=image%2Fpng" +
-                 "&SRS=EPSG:3857&WIDTH=256&HEIGHT=256" +
-                 "&BBOX=" + */
-
-          //      "https://wms.geo.ag.ch/public/wms?SERVICE=WMS&VERSION=1.3-0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&STYLES&LAYERS=public:"
-          //+ "ch_ag_geo_va_AVWMS&SRS=EPSG:3857&WIDTH=256&HEIGHT=256&BBOX=" +
-
-          xyzToBounds(coordinates.x, coordinates.y, zoom).join(",")
-        );
-
-        // Aargau: https://wms.geo.ag.ch/public/wms?SERVICE=WMS&VERSION=1.3-0&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&STYLES&LAYERS=public:
-        //ch_ag_geo_va_gemeindeef_01&SRS=EPSG:2056&WIDTH=769&HEIGHT=734&BBOX=
-        //2619465,1219981,2678104,1275947
-
-        /*return (
-              "https://www.mrlc.gov/geoserver/NLCD_Land_Cover/wms?" +
-              "&REQUEST=GetMap&SERVICE=WMS&VERSION=1.1.1" +
-              "&LAYERS=mrlc_display%3ANLCD_2016_Land_Cover_L48" +
-              "&FORMAT=image%2Fpng" +
-              "&SRS=EPSG:3857&WIDTH=256&HEIGHT=256" +
-              "&BBOX=" +
-              xyzToBounds(coordinates.x, coordinates.y, zoom).join(",")
-            );*/
-      };
-
-      function initMap() {
-        //22.2.2023 --> WMS
-        var landcover = new google.maps.ImageMapType({
-          getTileUrl: getTileUrl,
-          name: "Kataster",
-          alt: "WMS",
-          minZoom: 0,
-          maxZoom: 25,
-          opacity: 1, //ToDo
-        });
-
-        this.currentpolylines = [];
-        this.currentMode = "overviewMode";
-        this.newPolylines = [];
-        this.newObjects = [];
-        this.marker;
-
-        this.geocoder = new google.maps.Geocoder();
-        infoWindow = new google.maps.InfoWindow();
-
-        this.map = new google.maps.Map(document.getElementById("map"), {
-          center: { lat: 46.884, lng: 8.1336 },
-          zoom: 9, //18
-          mapTypeControl: true,
-          zoomControl: true,
-          scaleControl: true,
-          streetViewControl: true,
-          mapTypeControlOptions: {
-            mapTypeIds: [
-              "roadmap",
-              "satellite",
-              "hybrid",
-              "terrain",
-              "Landcover",
-            ],
-          },
-          styles: [
-            {
-              featureType: "poi",
-              stylers: [{ visibility: "off" }],
-            },
-            {
-              featureType: "transit",
-              elementType: "labels.icon",
-              stylers: [{ visibility: "off" }],
-            },
-          ],
-        });
-
-        map.mapTypes.set("Landcover", landcover);
-        map.setMapTypeId("Landcover");
-
-        // Disabels the 45° Imagery (3D Vison by zoom in)
-        map.setTilt(0);
-
-        // Define a symbol using SVG path notation, with an opacity of 1.
-        const lineSymbol = {
-          path: "M 0,-1 0,1",
-          strokeOpacity: 1,
-          scale: 4,
-        };
-
-        this.drawingManager = new google.maps.drawing.DrawingManager({
-          drawingMode: null,
-          drawingControl: false,
-          drawingControlOptions: {
-            position: google.maps.ControlPosition.TOP_CENTER,
-            drawingModes: [
-              google.maps.drawing.OverlayType.POLYLINE,
-              google.maps.drawing.OverlayType.POLYGON,
-              google.maps.drawing.OverlayType.RECTANGLE,
-            ],
-          },
-          polylineOptions: {
-            //strokeColor: randomColor,
-            strokeWeight: 2,
-            //   icons: [
-            //     {
-            //       icon: lineSymbol,
-            //     offset: "0",
-            //   repeat: "20px",
-            // },
-
-            // ],
-            editable: true,
-            // strokeOpacity: 0,
-          },
-
-          polygonOptions: {
-            //strokeColor: randomColor,
-            strokeWeight: 2,
-          },
-
-          rectangleOptions: {
-            //strokeColor: randomColor,
-            strokeWeight: 2,
-          },
-        });
-
-        //12.2.2023 --> WMS
-        /*    var landcover = new google.maps.ImageMapType({
-                    getTileUrl: getTileUrl,
-                    name: "Landcover",
-                    alt: "National Land Cover Database 2016",
-                    minZoom: 0,
-                    maxZoom: 19,
-                    opacity: 0.5 //ToDo
-    
-                });*/
-
-        //  map.overlayMapTypes.push(landcover); //funktioniert
-
-        drawingManager.setMap(this.map);
-
-        //Data from WIX
-        window.onmessage = async (event) => {
-          //Async?
-          debugger;
-          if (event.data.actions) {
-            for (var j = 0; j < event.data.actions.length; j++) {
-              switch (event.data.actions[j].action) {
-                case "downLoadPdf":
-                  await downloadPdf(event.data.actions[j].data);
-                  break;
-
-                case "getBase64":
-                  await getBase64(event.data.actions[j].data);
-                  break;
-
-                // Innerhalb des switch(event.data.actions[j].action) Blocks:
-                case "openInfo":
-                  openInfoWindowById(event.data.actions[j].data);
-                  break;
-
-                  // UND/ODER (je nachdem wie du sendest) im unteren Bereich bei den Einzel-Actions:
-                  if (event.data.action && event.data.action === "openInfo") {
-                    openInfoWindowById(event.data.id);
-                  }
-
-                case "setRole":
-                  role = "Verwalter";
-
-                  break;
-
-                case "setUIElVisibility":
-                  setVisibilityUIControls(
-                    event.data.actions[j].name,
-                    event.data.actions[j].visible,
-                  );
-                  break;
-
-                case "setOverviewMode":
-                  setUIElementsbyMode("overviewMode");
-                  break;
-
-                case "setNewMode":
-                  setUIElementsbyMode("newMode");
-                  break;
-
-                case "setSingleMode":
-                  setUIElementsbyMode("singleMode");
-                  break;
-
-                case "resetCenter":
-                  if (this.marker) {
-                    this.marker.setMap(null);
-                  }
-                  this.map.setCenter({ lat: 46.80121, lng: 8.226692 });
-                  this.map.setZoom(8);
-                  break;
-
-                case "search":
-                  geocodeAddress(geocoder, map, event.data.data.formatted);
-                  break;
-
-                case "drawPolylines":
-                  this.drawingManager.polylineOptions.strokeColor =
-                    event.data.actions[j].color;
-                  drawPolylines(event.data.actions[j].data);
-
-                  if (event.data.actions[j].center) {
-                    let pos = {
-                      latitude: event.data.actions[j].center.lat, //Trello 99
-                      longitude: event.data.actions[j].center.lng, //Trello 99
-                    };
-
-                    var latlng = new google.maps.LatLng(
-                      parseFloat(pos.latitude),
-                      parseFloat(pos.longitude),
-                    );
-                    this.map.setCenter(latlng);
-                  }
-
-                  if (event.data.actions[j].zoom) {
-                    this.map.setZoom(event.data.actions[j].zoom);
-                  }
-
-                  break;
-
-
-                     case "setRestrictedAreas":
-            // payload ist hier dein Array mit den 3 Objekten (Test SF, SF3, SF)
-            debugger;
-            
-            event.data.actions[j].data.forEach((areaGroup) => {
-              // Wir gehen durch die "objects" (Polygone) jeder Gruppe
-              areaGroup.objects.forEach((obj) => {
-                if (obj.type === "polygon") {
-                  // Koordinaten konvertieren: latitude -> lat, longitude -> lng
-                  const formattedPoints = obj.points.map((p) => ({
-                    lat: parseFloat(p.latitude),
-                    lng: parseFloat(p.longitude),
-                  }));
-
-                  // Funktion aufrufen und Beschreibung übergeben
-                  addRestrictedArea(formattedPoints, areaGroup.description);
-                }
-              });
-            });
-            break;
-
-                case "setCenter":
-                  let pos = {
-                    latitude: event.data.actions[j].coord.lat,
-                    longitude: event.data.actions[j].coord.long,
-                  };
-
-                  var latlng = new google.maps.LatLng(
-                    parseFloat(pos.latitude),
-                    parseFloat(pos.longitude),
-                  );
-                  this.map.setCenter(latlng);
-                  break;
-
-                case "setMap":
-                  if (
-                    event.data.actions[j].data.mode === "Gesuchskoordinator"
-                  ) {
-                    this.scenario = PRO_CORD;
-                  } else {
-                    this.scenario = SINGLE_PROJ;
-                  }
-              }
-            }
-
-            return;
-          }
-
-          if (event.data.action && event.data.action === "openInfo") {
-            openInfoWindowById(event.data.data);
-          }
-
-          if (event.data.action && event.data.action === "setOverviewMode") {
-            setUIElementsbyMode("overviewMode");
-          }
-          if (event.data.action && event.data.action === "setNewMode") {
-            setUIElementsbyMode("newMode");
-          }
-
-          if (event.data.action && event.data.action === "setSingleMode") {
-            setUIElementsbyMode("singleMode");
-          }
-
-          if (event.data.action && event.data.action === "resetCenter") {
-            if (this.marker) {
-              this.marker.setMap(null);
-            }
-            this.map.setCenter({ lat: 46.80121, lng: 8.226692 });
-            this.map.setZoom(8);
-          }
-
-          if (event.data.action && event.data.action === "search") {
-            geocodeAddress(geocoder, map, event.data.data.formatted);
-          }
-
-          if (event.data.action && event.data.action === "drawPolylines") {
-            this.drawingManager.polylineOptions.strokeColor = event.data.color;
-            drawPolylines(event.data.data);
-
-            if (event.data.center) {
-              let pos = {
-                latitude: event.data.center.lat,
-                longitude: event.data.center.lng,
-              };
-
-              var latlng = new google.maps.LatLng(
-                parseFloat(pos.latitude),
-                parseFloat(pos.longitude),
-              );
-              this.map.setCenter(latlng);
-            }
-          }
-
-          if (event.data.action && event.data.action === "setReadOnly") {
-            this.controlnewProject.style.visibility = "hidden"; //"hidden";
-          }
-
-          if (event.data.action && event.data.action === "setCenter") {
-            let pos = {
-              latitude: event.data.coord.lat,
-              longitude: event.data.coord.lng,
-            };
-
-            var latlng = new google.maps.LatLng(
-              parseFloat(pos.latitude),
-              parseFloat(pos.longitude),
-            );
-            this.map.setCenter(latlng);
-            //this.map.setZoom(17);
-          }
-
-          if (event.data.settings) {
-            this.controlnewProject.style.visibility = "visible"; //"hidden";
-            this.drawingManager.setOptions({
-              drawingControl: false,
-            });
-          }
-        };
-
-        let newObject = {};
-
-        newObject.points = [];
-
-        google.maps.event.addListener(
-          drawingManager,
-          "polylinecomplete",
-          function (polyline) {
-            this.controlReset.style.visibility = "visible";
-            this.controlSaveProject.style.visibility = "visible";
-
-            let object = {};
-            object.polyline = polyline;
-            object.type = "polyline";
-            this.newObjects.push(object);
-
-            this.newPolylines.push(polyline);
-          }.bind(this),
-        );
-
-        google.maps.event.addListener(
-          drawingManager,
-          "rectanglecomplete",
-          function (rectangle) {
-            this.controlReset.style.visibility = "visible";
-            this.controlSaveProject.style.visibility = "visible";
-
-            let object = {};
-            object.polyline = rectangle;
-            object.type = "rectangle";
-            this.newObjects.push(object);
-
-            this.newPolylines.push(rectangle);
-          }.bind(this),
-        );
-
-        google.maps.event.addListener(
-          drawingManager,
-          "polygoncomplete",
-          function (polygon) {
-            this.controlReset.style.visibility = "visible";
-            this.controlSaveProject.style.visibility = "visible";
-
-            let object = {};
-            object.polyline = polygon;
-            object.type = "polygon";
-            this.newObjects.push(object);
-
-            this.newPolylines.push(polygon);
-          }.bind(this),
-        );
-
-        const convertArrayToObject = (array, key) => {
-          const initialValue = {};
-          return array.reduce((obj, item) => {
-            return {
-              ...obj,
-              [item[key]]: item,
-            };
-          }, initialValue);
-        };
-
-
-        this.setUIElementsbyMode(currentMode);
-
-        let autocomplete;
-        let address1Field;
-        let address2Field;
-        let postalField;
-        // address1Field = document.querySelector("#ship-address");
-        // address2Field = document.querySelector("#address2");
-
-        //address1Field = document.querySelector("#addressControl");
-        //address1Field = document.getElementById('addressControl');
-        // Create the autocomplete object, restricting the search predictions to
-        // addresses in the US and Canada.
-        autocomplete = new google.maps.places.Autocomplete(this.adressControl, {
-          componentRestrictions: { country: ["ch"] },
-          fields: ["address_components", "geometry"],
-          types: ["address"],
-        });
-        this.adressControl.focus();
-        // When the user selects an address from the drop-down, populate the
-        // address fields in the form.
-        //autocomplete.addListener("place_changed", fillInAddress);
-
-        //test data begin
-
-        let testData = [
-          {
-            _id: "139cbb16-02e7-4e2d-bbf5-a5a67c27984d",
-            mailOwner: "info+gs1@swiss-infra.ch",
-            status: "in Arbeit",
-            start: "2022-06-25T22:00:00.000Z",
-            ende: "2022-06-25T22:00:00.000Z",
-            title: "32",
-            gsArt: "Allmendgesuch",
-            zweck: "1",
-            objects: [
-              {
-                _id: "baaa3a9e-8799-4a4b-966c-b46a375de879",
-                gesuch: "139cbb16-02e7-4e2d-bbf5-a5a67c27984d",
-                type: "rectangle",
-                points: [
-                  {
-                    _id: "aecde2e8-cf55-4c98-90fa-d6d540e19322",
-                    object: "baaa3a9e-8799-4a4b-966c-b46a375de879",
-                    latitude: "47.4558402378404",
-                    longitude: "7.5157600402705915",
-                  },
-                  {
-                    _id: "8f54b323-29d5-4cb6-8315-0e94052b4f2f",
-                    object: "baaa3a9e-8799-4a4b-966c-b46a375de879",
-                    latitude: "47.55617393876871",
-                    longitude: "7.615695667254234",
-                  },
-                ],
-              },
-            ],
-            color: "blue",
-          },
-          {
-            _id: "ff2de051-4ba4-4921-a03e-13cb44c3d595",
-            mailOwner: "info+gs1@swiss-infra.ch",
-            status: "genehmigt",
-            start: "2022-06-25T22:00:00.000Z",
-            ende: "2022-06-25T22:00:00.000Z",
-            title: "31",
-            gsArt: "Aufgrabungsgesuch",
-            zweck: "Test 2",
-            objects: [
-              {
-                _id: "3a8f08ab-d6db-456d-820d-ad72a16f33d8",
-                gesuch: "ff2de051-4ba4-4921-a03e-13cb44c3d595",
-                type: "polygon",
-                points: [
-                  {
-                    _id: "8847a126-e0f9-4c4f-83ba-6eee86523f59",
-                    object: "3a8f08ab-d6db-456d-820d-ad72a16f33d8",
-                    latitude: "47.455782212219695",
-                    longitude: "7.514820614767004",
-                  },
-                  {
-                    _id: "7b831a4b-9c5a-4d76-a827-e201059c7d1f",
-                    object: "3a8f08ab-d6db-456d-820d-ad72a16f33d8",
-                    latitude: "47.45542674546569",
-                    longitude: "7.514713326406408",
-                  },
-                  {
-                    _id: "9324c636-6786-45c1-9441-efd75f7a80a8",
-                    object: "3a8f08ab-d6db-456d-820d-ad72a16f33d8",
-                    latitude: "47.45542674546569",
-                    longitude: "7.5153034123896845",
-                  },
-                  {
-                    _id: "30020716-a6c4-42ff-8a84-d196ca0489fe",
-                    object: "3a8f08ab-d6db-456d-820d-ad72a16f33d8",
-                    latitude: "47.45579672101576",
-                    longitude: "7.515700379323889",
-                  },
-                ],
-              },
-            ],
-            color: "lightgreen",
-          },
-          {
-            _id: "d0561c29-b7d3-435b-9a80-4dfab558a9de",
-            mailOwner: "info+gs1@swiss-infra.ch",
-            status: "genehmigt",
-            start: "2022-06-21T22:00:00.000Z",
-            ende: "2022-06-21T22:00:00.000Z",
-            title: "30",
-            gsArt: "Aufgrabungsgesuch",
-            zweck: "dasf",
-            objects: [
-              {
-                _id: "d2222533-7dfc-4a48-a6b9-ae8394122d9c",
-                gesuch: "d0561c29-b7d3-435b-9a80-4dfab558a9de",
-                type: "polyline",
-                points: [
-                  {
-                    _id: "fd7c9bc4-cdcb-42e9-9071-fb262490996a",
-                    object: "d2222533-7dfc-4a48-a6b9-ae8394122d9c",
-                    latitude: "47.42253481290016",
-                    longitude: "7.483439611053462",
-                  },
-                  {
-                    _id: "46fa18b2-be72-49ef-9f84-8863481c1bf4",
-                    object: "d2222533-7dfc-4a48-a6b9-ae8394122d9c",
-                    latitude: "47.42302842154045",
-                    longitude: "7.485370801544184",
-                  },
-                ],
-              },
-            ],
-            color: "lightgreen",
-          },
-        ];
-        //  drawPolylines(testData);
-
-        //test data end
-      }
-
-      function setButtonVisibility(buttons) {
-        //button.name button.visibility
-      }
-
-      function setReadMode() {
-        //Anwender darf nur lesen
-      }
-
-      function setCreateMode() {
-        //Anwender darf auch neue Linienobjekte zeichnen
-      }
-
-      function deleteCurrentPolylines() {
-        for (let singlePolyline of currentpolylines) {
-          singlePolyline.setMap(null);
-        }
-      }
-
-      function deleteNewPolylines() {
-        for (let singlePolyline of newPolylines) {
-          singlePolyline.setMap(null);
-          newPolylines.shift();
-        }
-
-        for (let singleObject of newObjects) {
-          newObjects.shift();
-        }
-      }
-
-      function openInfoWindowById(id) {
-        // Suche in den aktuell gezeichneten Objekten
-        debugger;
-        const targetPoly = currentpolylines.find(
-          (poly) => poly.get("id") === id,
-        );
-
-        if (targetPoly) {
-          // Wir bestimmen ein Zentrum für das InfoWindow
-          let position;
-          const type = targetPoly.get("typ");
-
-          if (type === "Rectangle") {
-            position = targetPoly.getBounds().getCenter();
-          } else if (type === "Polygon") {
-            // Einfacher Mittelpunkt des Pfades
-            const path = targetPoly.getPath();
-            position = path.getAt(0);
-          } else if (type === "PolyLine") {
-            const path = targetPoly.getPath();
-            position = path.getAt(Math.floor(path.getLength() / 2));
-          }
-
-          // Nutze deine bestehende Funktion zum Öffnen
-          openInfoWindow({ latLng: position }, targetPoly);
-
-          // Optional: Karte auf das Objekt zentrieren
-          this.map.panTo(position);
-        } else {
-          console.log("Objekt mit ID " + id + " nicht auf der Karte gefunden.");
-        }
-      }
-
-      function showCurrentPolylines() {
-        for (let singlePolyline of currentpolylines) {
-          singlePolyline.setMap(this.map);
-        }
-      }
-
-      function drawPolylines(projects) {
-        const lineSymbol = {
-          path: "M 0,-1 0,1",
-          strokeOpacity: 1,
-          scale: 4,
-        };
-
-        let polyLine = {};
-        let strokeColor;
-
-        //bestehende erstmal löschen...
-        for (let singlePolyline of currentpolylines) {
-          singlePolyline.setMap(null);
-        }
-
-        for (let i = 0; i < (projects ? projects.length : 0); i++) {
-          //Trello 99 || damit zentrieren auch bei Gemeinden ohne Gesuch funktioniert...
-          let objects = projects[i].objects;
-
-          if (projects[i].color) {
-            strokeColor = projects[i].color;
-          } else {
-            strokeColor = "red";
-          }
-
-          for (let j = 0; j < objects.length; j++) {
-            let points = objects[j].points;
-
-            switch (objects[j].type) {
-              case "polyline":
-                let coOrds = [];
-                for (let k = 0; k < points.length; k++) {
-                  let singlePoint = {};
-                  singlePoint.lat = Number(points[k].latitude);
-                  singlePoint.lng = Number(points[k].longitude);
-                  coOrds.push(singlePoint);
-                }
-
-                polyLine = new google.maps.Polyline({
-                  path: coOrds,
-                  geodesic: true,
-                  strokeColor: strokeColor,
-                  strokeOpacity: 0,
-                  icons: [
-                    {
-                      icon: lineSymbol,
-                      offset: "0",
-                      repeat: "20px",
-                    },
-                  ],
-                  strokeWeight: 2,
-                });
-
-                polyLine.set("typ", "PolyLine");
-
-                break;
-
-              case "polygon":
-                const triangleCoords = [];
-
-                for (let point of points) {
-                  triangleCoords.push({
-                    lat: Number(point.latitude),
-                    lng: Number(point.longitude),
-                  });
-                }
-
-                polyLine = new google.maps.Polygon({
-                  paths: triangleCoords,
-                  strokeColor: strokeColor,
-                  fillColor: strokeColor,
-                  fillOpacity: 0.4,
-                  strokeOpacity: 1.0,
-                  strokeWeight: 2,
-                });
-
-                polyLine.set("typ", "Polygon");
-
-                break;
-
-              case "rectangle":
-                // let latLongBounds = new google.maps.LatLngBounds([{ lat: 7, lng: 47 }, { lat: 8, lng: 47 }]);
-
-                polyLine = new google.maps.Rectangle({
-                  bounds: {
-                    north: Number(points[1].latitude),
-                    south: Number(points[0].latitude),
-                    east: Number(points[1].longitude),
-                    west: Number(points[0].longitude),
-                  },
-
-                  strokeColor: strokeColor,
-                  fillColor: strokeColor,
-                  fillOpacity: 0.4,
-                  strokeOpacity: 1.0,
-                  strokeWeight: 2,
-                });
-
-                polyLine.set("typ", "Rectangle");
-
-                break;
-              default:
-                break;
-            }
-            debugger;
-            polyLine.set("description", projects[i].description);
-            polyLine.set("projectName", projects[i].title);
-            polyLine.set("id", projects[i]._id);
-            polyLine.set("status", projects[i].status);
-            polyLine.set("start", projects[i].start);
-            polyLine.set("ende", projects[i].ende);
-            polyLine.set("gsArt", projects[i].gsArt);
-
-            if (projects[i].gsArt === "Sperrfläche") {
-              polyLine.set("zweck", projects[i].zweck);
-            }
-
-            google.maps.event.addListener(polyLine, "click", function (event) {
-              function getAreaOfPolyLine(currentPolyLine) {
-                let rectBoundsLatlng = [];
-                let rectBoundsLatlngPath = [];
-
-                switch (currentPolyLine.typ) {
-                  case "Rectangle":
-                    rectBoundsLatlng[0] = currentPolyLine
-                      .getBounds()
-                      .getSouthWest();
-
-                    rectBoundsLatlng[1] = currentPolyLine
-                      .getBounds()
-                      .getNorthEast();
-                    ((rectBoundsLatlngPath[0] = new google.maps.LatLng(
-                      rectBoundsLatlng[1].lat(),
-                      rectBoundsLatlng[0].lng(),
-                    )),
-                      (rectBoundsLatlngPath[1] = new google.maps.LatLng(
-                        rectBoundsLatlng[0].lat(),
-                        rectBoundsLatlng[1].lng(),
-                      )));
-
-                    var areaPath = [
-                      rectBoundsLatlng[0],
-                      rectBoundsLatlngPath[0],
-                      rectBoundsLatlng[1],
-                      rectBoundsLatlngPath[1],
-                      rectBoundsLatlng[0],
-                    ];
-
-                    return google.maps.geometry.spherical.computeArea(areaPath);
-
-                    break;
-
-                  case "Polygon":
-                    return google.maps.geometry.spherical.computeArea(
-                      currentpolylines[j].getPath(),
-                    );
-
-                    break;
-
-                  case "PolyLine":
-                    return 0;
-
-                    break;
-
-                  default:
-                    break;
-                }
-              }
-
-              function getSmallerPolyLine(currentPolyLine, minPolyLine) {
-                if (!minPolyLine) {
-                  return currentPolyLine;
-                }
-
-                return getAreaOfPolyLine(currentPolyLine) <
-                  getAreaOfPolyLine(minPolyLine)
-                  ? currentPolyLine
-                  : minPolyLine;
-              }
-
-              //Ermittlung des kleinsten Polygons....
-              let minPolyGon;
-
-              for (var j = 0; j < currentpolylines.length; j++) {
-                if (currentpolylines[j].typ === "Rectangle") {
-                  if (currentpolylines[j].getBounds().contains(event.latLng)) {
-                    minPolyGon = getSmallerPolyLine(
-                      currentpolylines[j],
-                      minPolyGon,
-                    );
-                  }
-                }
-
-                if (currentpolylines[j].typ === "Polygon") {
-                  if (
-                    google.maps.geometry.poly.containsLocation(
-                      event.latLng,
-                      currentpolylines[j],
-                    )
-                  ) {
-                    minPolyGon = getSmallerPolyLine(
-                      currentpolylines[j],
-                      minPolyGon,
-                    );
-                  }
-                }
-
-                if (currentpolylines[j].typ === "PolyLine") {
-                  if (
-                    google.maps.geometry.poly.isLocationOnEdge(
-                      event.latLng,
-                      currentpolylines[j],
-                      10e-6,
-                    )
-                  ) {
-                    minPolyGon = currentpolylines[j];
-                  }
-                }
-              }
-
-              //infoWindow
-
-              openInfoWindow(event, minPolyGon);
-            });
-
-            // Open the this.infowindow on mouseover:
-            google.maps.event.addListener(polyLine, "mouseover", function (e) {
-              debugger;
-              openInfoWindow(e, this);
-            });
-
-            // // assuming you want the this.infowindow to close on mouseout
-            google.maps.event.addListener(
-              polyLine,
-              "mouseout",
-              function () {
-                infoWindow.close();
-              }.bind(this),
-            );
-
-            polyLine.setMap(this.map);
-
-            currentpolylines.push(polyLine);
-          }
-        }
-      }
-
-      function openInfoWindow(e, project) {
-        infoWindow.setPosition(e.latLng);
-        let contentString;
-        let startFormatted = formatDate(project.start);
-        let endeFormatted = formatDate(project.ende);
-        let buttonText = "Zum Gesuch";
-        let dynamicPartContentString;
-
-        if (!project.hideDetails && project.gsArt != "Sperrfläche") {
-          dynamicPartContentString =
-            "<b>Status: </b>" +
-            project.status +
-            "<br>" +
-            "<b>Zeitraum: </b>" +
-            startFormatted +
-            "-" +
-            endeFormatted +
-            "<br>" +
-            "<br>" +
-            '<button style = "background-color:DarkSlateGray; border-color:DarkSlateGray; color:white" onClick="myFunction(\'' +
-            project.id +
-            "'" +
-            ",'" +
-            project.gsArt +
-            "')\" >" +
-            buttonText +
-            " </button>";
-        } else if (this.gsArt === "Sperrfläche") {
-          dynamicPartContentString =
-            "<b>Zweck: </b>" +
-            project.zweck +
-            "<br>" +
-            "<b>Zeitraum: </b>" +
-            startFormatted +
-            "-" +
-            endeFormatted +
-            "<br>";
-        } else {
-          dynamicPartContentString =
-            "<b>Status: </b>" +
-            project.status +
-            "<br>" +
-            "<b>Zeitraum: </b>" +
-            startFormatted +
-            "-" +
-            endeFormatted +
-            "<br>";
-        }
-
-        if (role === "Verwalter") {
-          dynamicPartContentString =
-            dynamicPartContentString +
-            "<br>" +
-            '<button style = "background-color:DarkSlateGray; border-color:DarkSlateGray; color:white" onClick="myFunctionDel(\'' +
-            project.projectName +
-            "'" +
-            ",'" +
-            project.gsArt +
-            "')\" > Löschen </button>";
-        }
-
-        debugger;
-        contentString =
-          '<div id="content">' +
-          '<div id="siteNotice">' +
-          "</div>" +
-          '<h3 id="firstHeading" class="firstHeading">' +
-          project.description +
-          "</h3>" +
-          '<div id="bodyContent">' +
-          dynamicPartContentString +
-          "</div>" +
-          "</div>";
-
-        infoWindow.setContent(contentString);
-        infoWindow.open(this.map);
-      }
-
-      function formatDate(datum) {
-        if (!datum || datum === "undefined") {
-          return "";
-        }
-        var date = new Date(datum);
-        return (
-          date.getDate() +
-          "." +
-          (date.getMonth() + 1) +
-          "." +
-          date.getFullYear()
-        );
-      }
-
-      function myFunctionDel(project, gsArt) {
-        let obj = {
-          action: "delete",
-          param: project,
-          param2: gsArt,
-        };
-        window.parent.postMessage(obj, "*");
-      }
-
-      function myFunction(id, gsArt) {
-        let obj = {
-          action: "navigate",
-          param: id,
-          param2: gsArt,
-        };
-        window.parent.postMessage(obj, "*");
-      }
-
-      function myFunctionClose(project, gsArt) {
-        infoWindow.close();
-      }
-
-      function geocodeAddress(geocoder, resultsMap, address) {
-        //  const address = document.getElementById("address").value;
-        //const address = "Berlin";
-        geocoder.geocode({ address: address }, (results, status) => {
-          if (status === "OK") {
-            resultsMap.setCenter(results[0].geometry.location);
-            if (this.marker) {
-              this.marker.setMap(null);
-            }
-
-            this.marker = new google.maps.Marker({
-              map: resultsMap,
-              position: results[0].geometry.location,
-            });
-
-            resultsMap.setZoom(17);
-          } else {
-            alert(
-              "Geocode was not successful for the following reason: " + status,
-            );
-          }
-        });
-      }
-      async function getBase64(data) {
-        debugger;
-
-        var screenshot = {};
-        await html2canvas(document.getElementById("map"), {
-          useCORS: true,
-          optimized: false,
-          allowTaint: false,
-          onrendered: async function (canvas) {
-            var tempcanvas = document.createElement("canvas");
-            tempcanvas.width = 650;
-            tempcanvas.height = 350;
-            var context = tempcanvas.getContext("2d");
-            context.drawImage(canvas, 0, 0, 650, 350, 0, 0, 650, 350);
-
-            var imgData = tempcanvas.toDataURL("image/jpeg", 1.0);
-            var pdf = new jsPDF();
-
-            var pageHeight = pdf.internal.pageSize.height;
-
-            //allgemeiner Teil
-            //Page 1 from here
-            pdf.setFontStyle("bold");
-            pdf.text(
-              10,
-              10,
-              "Zusammenfassung zum " +
-                data.gesuchArt +
-                " Nr. " +
-                data.gesuchTitel,
-            );
-            pdf.addImage(imgData, "JPEG", 10, 20);
-
-            pdf.setFontStyle("normal");
-            pdf.setFontSize(12);
-
-            //Adding the "Gesuchdetails"
-            pdf.text(
-              10,
-              125,
-              "Das " +
-                data.gesuchArt +
-                " Nr. " +
-                data.gesuchTitel +
-                " wurde " +
-                data.gesuchStatus,
-            );
-
-            pdf.setFontStyle("bold");
-            pdf.text("Adressen", 10, 135);
-            pdf.setFontStyle("normal");
-
-            //spezieller Teil
-            debugger;
-            if (data.gesuchArt === "Aufgrabungsgesuch") {
-              debugger;
-
-              pdf.text(10, 145, "Kontaktdaten Gesuchsteller");
-              pdf.text(data.gesuchAdressGesuchsteller, 10, 150, 0);
-
-              pdf.text(80, 145, "Kontaktdaten Bauherr");
-              pdf.text(data.gesuchAdressBauherr, 80, 150, 0);
-
-              pdf.text(140, 145, "Kontaktdaten Bauunternehmung");
-              pdf.text(data.gesuchAdressBauunternehmung, 140, 150, 0);
-
-              // Adding the "Baustart" and "Bauende"
-              pdf.setFontStyle("bold");
-              pdf.text("Dauer", 10, 200);
-              pdf.setFontStyle("normal");
-              pdf.text(data.gesuchBaustart, 10, 210);
-              pdf.text("bis", 35, 210);
-              pdf.text(data.gesuchBauende, 50, 210);
-
-              // Adding the "Betroffene Flächen"
-              pdf.setFontStyle("bold");
-              pdf.text("Betroffene Flächen", 10, 220);
-              pdf.setFontStyle("normal");
-
-              pdf.text("Fahrbahn:", 10, 230);
-              pdf.text(data.gesuchFahrbahnLBH, 50, 230);
-              pdf.text("(Länge x Breite x Tiefe)", 90, 230);
-              pdf.text("Belagsart: ", 140, 230);
-              pdf.text(data.gesuchBelagsart, 160, 230);
-
-              pdf.text("Trottoir:", 10, 240);
-              pdf.text(data.gesuchTrottoirLBH, 50, 240);
-              pdf.text("(Länge x Breite x Tiefe)", 90, 240);
-
-              pdf.text("Übriges Terrain:", 10, 250);
-              pdf.text(data.gesuchAnderesTerrainLBH, 50, 250);
-              pdf.text("(Länge x Breite x Tiefe)", 90, 250);
-
-              pdf.text("Absperrung notwendig für:", 10, 270);
-              pdf.text(data.gesuchAbsperrung, 70, 270);
-
-              //Adding Date and Time at the
-              pdf.setFontSize(10);
-              var date = new Date();
-              pdf.text("Gedruckt am: " + date, 10, 290);
-              pdf.setFontSize(12);
-
-              // Page 2 from here
-              pdf.addPage("a4", "p");
-              pdf.setPage(2);
-              cursorY = 10;
-
-              // Adding the "Zweck"
-              pdf.setFontStyle("bold");
-              pdf.text("Zweck", 10, cursorY);
-              cursorY = cursorY + 10;
-              // Adds Auto-wraping (auto-lining + auto-paiging)
-              var splitText = pdf.splitTextToSize(data.gesuchZweck, 200);
-              pdf.setFontStyle("normal");
-              splitText.forEach((lineText) => {
-                if (cursorY > pageHeight - 15) {
-                  // Auto-paging
-                  pdf.addPage();
-                  cursorY = 10;
-                }
-                pdf.text(lineText, 10, cursorY);
-                cursorY += 5;
-              });
-              cursorY = cursorY + 5;
-
-              //Adding the "Bemerkungen"
-              pdf.setFontStyle("bold");
-              pdf.text("Bemerkung", 10, cursorY);
-              cursorY = cursorY + 10;
-              // Adds Text with Auto-wraping (auto-lining + auto-paiging)
-              splitText = pdf.splitTextToSize(data.gesuchBemerkungen, 200);
-              pdf.setFontStyle("normal");
-              splitText.forEach((lineText) => {
-                if (cursorY > pageHeight - 15) {
-                  // Auto-paging
-                  pdf.addPage();
-                  cursorY = 10;
-                }
-                pdf.text(lineText, 10, cursorY);
-                cursorY += 5;
-              });
-              cursorY = cursorY + 5;
-
-              //Adding the "Auflagen"
-              pdf.setFontStyle("bold");
-              pdf.text("Auflagen", 10, cursorY);
-              cursorY = cursorY + 10;
-              // Adds Text with Auto-wraping (auto-lining + auto-paiging)
-              splitText = pdf.splitTextToSize(data.gesuchAuflagen, 200);
-              pdf.setFontStyle("normal");
-              splitText.forEach((lineText) => {
-                if (cursorY > pageHeight - 15) {
-                  // Auto-paging
-                  pdf.addPage();
-                  cursorY = 10;
-                }
-                pdf.text(lineText, 10, cursorY);
-                cursorY += 5;
-              });
-              cursorY = cursorY + 5;
-            } else if (data.gesuchArt === "Allmendgesuch") {
-              debugger;
-              pdf.text(10, 145, "Kontaktdaten Gesuchsteller");
-              //  pdf.text(10, 145, 'Kontaktdaten Gesuchsteller');
-              pdf.text(data.gesuchAdressGesuchsteller, 10, 150, 0);
-              //pdf.text(data.gesuchAdressGesuchsteller, 10, 150, 0);
-              pdf.text(80, 145, "Kontaktdaten Bauherr");
-              pdf.text(data.gesuchAdressBauherr, 80, 150, 0);
-              pdf.text(140, 145, "Kontaktdaten Bauunternehmung");
-              pdf.text(data.gesuchAdressBauunternehmung, 140, 150, 0);
-              // Adding the "Baustart" and "Bauende"
-              pdf.setFontStyle("bold");
-              pdf.text("Dauer", 10, 200);
-              pdf.setFontStyle("normal");
-              pdf.text(data.gesuchBaustart, 10, 210);
-              pdf.text("bis", 35, 210);
-              pdf.text(data.gesuchBauende, 50, 210);
-              // Adding the "Betroffene Flächen"
-              pdf.setFontStyle("bold");
-              pdf.text("Betroffene Flächen", 10, 220);
-              pdf.setFontStyle("normal");
-              pdf.text("Übriges Terrain:", 10, 230);
-              pdf.text(data.gesuchAnderesTerrainLBH, 50, 230);
-              pdf.text("(Länge x Breite)", 90, 230);
-              pdf.text("Absperrung notwendig für:", 10, 250);
-              pdf.text(data.gesuchAbsperrung, 70, 250);
-              // Adding the "Grund der Beanspurchung"
-              pdf.text("Grund der Beanspruchung:", 140, 220);
-              pdf.text(data.gesuchBeanspruchungsgrund, 140, 230);
-              //Adding Date and Time at the
-              pdf.setFontSize(10);
-              var date = new Date();
-              pdf.text("Gedruckt am: " + date, 10, 290);
-              pdf.setFontSize(12);
-              // Page 2 from here
-              pdf.addPage("a4", "p");
-              pdf.setPage(2);
-              cursorY = 10;
-              // Adding the "Zweck"
-              pdf.setFontStyle("bold");
-              pdf.text("Zweck", 10, cursorY);
-              cursorY = cursorY + 10;
-              // Adds Auto-wraping (auto-lining + auto-paiging)
-              var splitText = pdf.splitTextToSize(data.gesuchZweck, 200);
-              pdf.setFontStyle("normal");
-              splitText.forEach((lineText) => {
-                if (cursorY > pageHeight - 15) {
-                  // Auto-paging
-                  pdf.addPage();
-                  cursorY = 10;
-                }
-                pdf.text(lineText, 10, cursorY);
-                cursorY += 5;
-              });
-              cursorY = cursorY + 5;
-              //Adding the "Bemerkungen"
-              pdf.setFontStyle("bold");
-              pdf.text("Bemerkung", 10, cursorY);
-              cursorY = cursorY + 10;
-              // Adds Text with Auto-wraping (auto-lining + auto-paiging)
-              splitText = pdf.splitTextToSize(data.gesuchBemerkungen, 200);
-              pdf.setFontStyle("normal");
-              splitText.forEach((lineText) => {
-                if (cursorY > pageHeight - 15) {
-                  // Auto-paging
-                  pdf.addPage();
-                  cursorY = 10;
-                }
-                pdf.text(lineText, 10, cursorY);
-                cursorY += 5;
-              });
-              cursorY = cursorY + 5;
-              //Adding the "Auflagen"
-              pdf.setFontStyle("bold");
-              pdf.text("Auflagen", 10, cursorY);
-              cursorY = cursorY + 10;
-              // Adds Text with Auto-wraping (auto-lining + auto-paiging)
-              splitText = pdf.splitTextToSize(data.gesuchAuflagen, 200);
-              pdf.setFontStyle("normal");
-              splitText.forEach((lineText) => {
-                if (cursorY > pageHeight - 15) {
-                  // Auto-paging
-                  pdf.addPage();
-                  cursorY = 10;
-                }
-                pdf.text(lineText, 10, cursorY);
-                cursorY += 5;
-              });
-              cursorY = cursorY + 5;
-            }
-
-            // PDF download
-            // pdf.save(data.gesuchArt + "_" + data.gesuchTitel + ".pdf"); //lokaler Download zum Testen
-
-            var pdfBase64 = pdf.output("datauristring").slice(28);
-
-            //hier wird PDF also Base64String wieder an WIX geschickt
-            let obj = {
-              action: "base64Received",
-              pdfBase64: pdfBase64,
-              status: data.gesuchStatus,
-            };
-
-            debugger;
-
-            window.parent.postMessage(obj, "*"); //--> wenn Daten wieder zurück an Wix sollen
-          },
-        });
-      }
-
-      async function downloadPdf(data) {
-        debugger;
-        var screenshot = {};
-        var cursorY = 0;
-
-        await html2canvas(document.getElementById("map"), {
-          useCORS: true,
-          optimized: false,
-          allowTaint: false,
-          onrendered: async function (canvas) {
-            debugger;
-            var tempcanvas = document.createElement("canvas");
-            tempcanvas.width = 650;
-            tempcanvas.height = 350;
-            var context = tempcanvas.getContext("2d");
-            context.drawImage(canvas, 0, 0, 650, 350, 0, 0, 650, 350);
-
-            var imgData = tempcanvas.toDataURL("image/jpeg", 1.0);
-            var pdf = new jsPDF();
-
-            var pageHeight = pdf.internal.pageSize.height;
-
-            //Page 1 from here
-            pdf.setFontStyle("bold");
-            pdf.text(
-              10,
-              10,
-              "Zusammenfassung zum " +
-                data.gesuchArt +
-                " Nr. " +
-                data.gesuchTitel,
-            );
-            pdf.addImage(imgData, "JPEG", 10, 20);
-
-            pdf.setFontStyle("normal");
-            pdf.setFontSize(12);
-
-            //Adding the "Gesuchdetails"
-            pdf.text(
-              10,
-              125,
-              "Das " +
-                data.gesuchArt +
-                " Nr. " +
-                data.gesuchTitel +
-                " wurde " +
-                data.gesuchStatus,
-            );
-
-            pdf.setFontStyle("bold");
-            pdf.text("Adressen", 10, 135);
-            pdf.setFontStyle("normal");
-
-            pdf.text(10, 145, "Kontaktdaten Gesuchsteller");
-            pdf.text(data.gesuchAdressGesuchsteller, 10, 150, 0);
-
-            pdf.text(80, 145, "Kontaktdaten Bauherr");
-            pdf.text(data.gesuchAdressBauherr, 80, 150, 0);
-
-            pdf.text(140, 145, "Kontaktdaten Bauunternehmung");
-            pdf.text(data.gesuchAdressBauunternehmung, 140, 150, 0);
-
-            // Adding the "Baustart" and "Bauende"
-            pdf.setFontStyle("bold");
-            pdf.text("Dauer", 10, 200);
-            pdf.setFontStyle("normal");
-            pdf.text(data.gesuchBaustart, 10, 210);
-            pdf.text("bis", 35, 210);
-            pdf.text(data.gesuchBauende, 50, 210);
-
-            // Adding the "Betroffene Flächen"
-            pdf.setFontStyle("bold");
-            pdf.text("Betroffene Flächen", 10, 220);
-            pdf.setFontStyle("normal");
-
-            pdf.text("Fahrbahn:", 10, 230);
-            pdf.text(data.gesuchFahrbahnLBH, 50, 230);
-            pdf.text("(Länge x Breite x Tiefe)", 90, 230);
-            pdf.text("Belagsart: ", 140, 230);
-            pdf.text(data.gesuchBelagsart, 160, 230);
-
-            pdf.text("Trottoir:", 10, 240);
-            pdf.text(data.gesuchTrottoirLBH, 50, 240);
-            pdf.text("(Länge x Breite x Tiefe)", 90, 240);
-
-            pdf.text("Übriges Terrain:", 10, 250);
-            pdf.text(data.gesuchAnderesTerrainLBH, 50, 250);
-            pdf.text("(Länge x Breite x Tiefe)", 90, 250);
-
-            pdf.text("Absperrung notwendig für:", 10, 270);
-            pdf.text(data.gesuchAbsperrung, 70, 270);
-
-            //Adding Date and Time at the
-            pdf.setFontSize(10);
-            var date = new Date();
-            pdf.text("Gedruckt am: " + date, 10, 290);
-            pdf.setFontSize(12);
-
-            // Page 2 from here
-            pdf.addPage("a4", "p");
-            pdf.setPage(2);
-            cursorY = 10;
-
-            // Adding the "Zweck"
-            pdf.setFontStyle("bold");
-            pdf.text("Zweck", 10, cursorY);
-            cursorY = cursorY + 10;
-            // Adds Auto-wraping (auto-lining + auto-paiging)
-            var splitText = pdf.splitTextToSize(data.gesuchZweck, 200);
-            pdf.setFontStyle("normal");
-            splitText.forEach((lineText) => {
-              if (cursorY > pageHeight - 15) {
-                // Auto-paging
-                pdf.addPage();
-                cursorY = 10;
-              }
-              pdf.text(lineText, 10, cursorY);
-              cursorY += 5;
-            });
-            cursorY = cursorY + 5;
-
-            //Adding the "Bemerkungen"
-            pdf.setFontStyle("bold");
-            pdf.text("Bemerkung", 10, cursorY);
-            cursorY = cursorY + 10;
-            // Adds Text with Auto-wraping (auto-lining + auto-paiging)
-            splitText = pdf.splitTextToSize(data.gesuchBemerkungen, 200);
-            pdf.setFontStyle("normal");
-            splitText.forEach((lineText) => {
-              if (cursorY > pageHeight - 15) {
-                // Auto-paging
-                pdf.addPage();
-                cursorY = 10;
-              }
-              pdf.text(lineText, 10, cursorY);
-              cursorY += 5;
-            });
-            cursorY = cursorY + 5;
-
-            //Adding the "Auflagen"
-            pdf.setFontStyle("bold");
-            pdf.text("Auflagen", 10, cursorY);
-            cursorY = cursorY + 10;
-            // Adds Text with Auto-wraping (auto-lining + auto-paiging)
-            splitText = pdf.splitTextToSize(data.gesuchAuflagen, 200);
-            pdf.setFontStyle("normal");
-            splitText.forEach((lineText) => {
-              if (cursorY > pageHeight - 15) {
-                // Auto-paging
-                pdf.addPage();
-                cursorY = 10;
-              }
-              pdf.text(lineText, 10, cursorY);
-              cursorY += 5;
-            });
-            cursorY = cursorY + 5;
-
-            // PDF download
-            pdf.save(data.gesuchArt + "_" + data.gesuchTitel + ".pdf"); //lokaler Download zum Testen
-          },
-        });
-      }
-
-           function addRestrictedArea(points, description) {
-        // 1. Google Polygon für Kollision
-        const poly = new google.maps.Polygon({
-          paths: points,
-          strokeColor: "red",
-          strokeWeight: 2,
-          fillOpacity: 0.8, // Ein bisschen Deckung, damit man es zum Klicken sieht
-          map: map,
-          clickable: true, // Muss true sein für InfoWindow
-        });
-
-        // InfoWindow erstellen
-        const infoWindow = new google.maps.InfoWindow({
-          content: `<div style="color: black; padding: 5px;"><strong>${description}</strong></div>`,
-        });
-
-        // Klick-Event hinzufügen
-        poly.addListener("click", (event) => {
-          infoWindow.setPosition(event.latLng);
-          infoWindow.open(map);
-        });
-
-        //blockingPolygons.push(poly);
-
-        // 2. Schraffiertes Overlay (dein bestehender Code)
-        /*const lats = points.map((p) => p.lat);
-        const lngs = points.map((p) => p.lng);
-        const bounds = {
-          north: Math.max(...lats),
-          south: Math.min(...lats),
-          east: Math.max(...lngs),
-          west: Math.min(...lngs),
-        };
-
-        const overlay = new google.maps.GroundOverlay(stripeUrl, bounds, {
-          opacity: 0.6,
-          clickable: false, // Das Overlay sollte Klicks durchlassen zum Polygon
-        });
-
-        overlay.setMap(map);
-        blockingOverlays.push(overlay); */
-      }
-
-      function setVisibilityUIControls(name, visible) {
-        switch (name) {
-          case "NeuesGesuch":
-            this.controlnewProject.style.visibility = "hidden";
-
-            break;
-
-          default:
-            break;
-        }
-      }
-
-
-      function setUIElementsbyMode(newMode) {
-        switch (newMode) {
-          case "newMode":
-            this.controlText2.innerHTML = "Zur Übersicht";
-            this.controlReset.style.visibility = "hidden";
-            this.controlSaveProject.style.visibility = "hidden";
-
-            //neues Projekt
-            this.drawingManager.setOptions({
-              drawingControl: false,
-            });
-            this.drawingManager.setMap(this.map);
-
-            if (this.scenario === PRO_CORD) {
-              deleteCurrentPolylines();
-            }
-
-            break;
-          case "singleMode":
-          
-            this.drawingManager.setOptions({
-              drawingControl: false,
-            });
-            this.drawingManager.setMap(null);
-     
-
-            break;
-          case "overviewMode":
-   
-            this.drawingManager.setOptions({
-              drawingControl: false,
-            });
-            this.drawingManager.setMap(null);
-            this.controlReset.style.visibility = "hidden";
-            showCurrentPolylines();
-            deleteNewPolylines();
-            break;
-
-          default:
-            break;
-        }
-      }
-    </script>
-  </head>
-
-  <body>
+</head>
+<body>
     <div id="map"></div>
-  </body>
-</html>
 
+    <script>
+        // --- Globale Variablen & State ---
+        let map, drawingManager, infoWindow, geocoder;
+        let currentPolylines = []; // Objekte aus der DB (Gesuche)
+        let blockingPolygons = []; // Sperrflächen für Kollisions-Check
+        let allCreatedShapes = []; // Vom User neu gezeichnete Objekte
+        let searchMarker = null;
+        let config = { mode: 'OVERVIEW', role: 'GAST' };
+
+        // --- Initialisierung ---
+        function initMap() {
+            geocoder = new google.maps.Geocoder();
+            infoWindow = new google.maps.InfoWindow();
+            
+            map = new google.maps.Map(document.getElementById("map"), {
+                center: { lat: 46.884, lng: 8.1336 },
+                zoom: 9,
+                mapTypeControl: true,
+                styles: [{ featureType: "poi", stylers: [{ visibility: "off" }] }]
+            });
+
+            setupDrawingManager();
+            setupWmsLayer();
+            
+            // Signal an Wix: "Ich bin bereit"
+            window.parent.postMessage({ action: "mapReady" }, "*");
+        }
+
+        function setupWmsLayer() {
+            const EXTENT = [-Math.PI * 6378137, Math.PI * 6378137];
+            const xyzToBounds = (x, y, z) => {
+                const tileSize = (EXTENT[1] * 2) / Math.pow(2, z);
+                return [EXTENT[0] + x * tileSize, EXTENT[1] - (y + 1) * tileSize, EXTENT[0] + (x + 1) * tileSize, EXTENT[1] - y * tileSize];
+            };
+
+            const landcover = new google.maps.ImageMapType({
+                getTileUrl: (coord, zoom) => {
+                    const bbox = xyzToBounds(coord.x, coord.y, zoom).join(",");
+                    return `https://geowms.bl.ch/?version=1.1.1&REQUEST=GetMap&SERVICE=WMS&LAYERS=grundkarte_farbig_group&FORMAT=image/png&SRS=EPSG:3857&WIDTH=256&HEIGHT=256&BBOX=${bbox}`;
+                },
+                tileSize: new google.maps.Size(256, 256),
+                name: "Kataster",
+                maxZoom: 20
+            });
+            map.mapTypes.set("Landcover", landcover);
+        }
+
+        function setupDrawingManager() {
+            drawingManager = new google.maps.drawing.DrawingManager({
+                drawingMode: null,
+                drawingControl: false,
+                polylineOptions: { editable: true, strokeColor: '#3498db' },
+                polygonOptions: { editable: true, fillColor: '#2ecc71', fillOpacity: 0.3 },
+                rectangleOptions: { editable: true, fillColor: '#f1c40f', fillOpacity: 0.3 }
+            });
+            drawingManager.setMap(map);
+
+            google.maps.event.addListener(drawingManager, 'overlaycomplete', (event) => {
+                const newShape = event.overlay;
+                const type = event.type;
+                
+                // Kollisionsprüfung mit Turf.js
+                if (checkCollision(newShape, type)) {
+                    newShape.setMap(null);
+                    window.parent.postMessage({ action: "collisionDetected" }, "*");
+                    return;
+                }
+
+                allCreatedShapes.push(newShape);
+                const points = extractPoints(newShape, type);
+                window.parent.postMessage({ action: "shapeCreated", type, points }, "*");
+            });
+        }
+
+        // --- Helper Funktionen ---
+        function checkCollision(shape, type) {
+            if (blockingPolygons.length === 0) return false;
+            const newGeoJSON = googleToTurf(shape, type);
+            return blockingPolygons.some(block => {
+                const blockGeoJSON = googleToTurf(block, 'polygon');
+                return turf.intersect(newGeoJSON, blockGeoJSON);
+            });
+        }
+
+        function googleToTurf(shape, type) {
+            if (type === 'polyline') {
+                return turf.lineString(shape.getPath().getArray().map(p => [p.lng(), p.lat()]));
+            }
+            let coords;
+            if (type === 'rectangle') {
+                const b = shape.getBounds();
+                coords = [[ [b.getSouthWest().lng(), b.getSouthWest().lat()], [b.getNorthEast().lng(), b.getSouthWest().lat()], [b.getNorthEast().lng(), b.getNorthEast().lat()], [b.getSouthWest().lng(), b.getNorthEast().lat()], [b.getSouthWest().lng(), b.getSouthWest().lat()] ]];
+            } else {
+                const path = shape.getPath().getArray().map(p => [p.lng(), p.lat()]);
+                path.push(path[0]); // Close polygon
+                coords = [path];
+            }
+            return turf.polygon(coords);
+        }
+
+        function extractPoints(shape, type) {
+            if (type === 'rectangle') {
+                const b = shape.getBounds();
+                return [
+                    { lat: b.getNorthEast().lat().toString(), longitude: b.getNorthEast().lng().toString() },
+                    { lat: b.getSouthWest().lat().toString(), longitude: b.getSouthWest().lng().toString() }
+                ];
+            }
+            return shape.getPath().getArray().map(p => ({ lat: p.lat().toString(), longitude: p.lng().toString() }));
+        }
+
+        function formatDate(d) { return d ? new Date(d).toLocaleDateString("de-CH") : ""; }
+
+        // --- Message Handler (Wix Interaktion) ---
+        window.onmessage = async (event) => {
+            const data = event.data;
+            const actions = data.actions || (data.action ? [data] : []);
+
+            for (const item of actions) {
+                const payload = item.data || item;
+                switch (item.action) {
+                    case "initConfiguration":
+                        config.mode = payload.mode;
+                        config.role = payload.role;
+                        break;
+
+                    case "drawPolylines": // Bestehende Daten anzeigen
+                        currentPolylines.forEach(p => p.setMap(null));
+                        currentPolylines = [];
+                        payload.forEach(proj => renderProject(proj));
+                        break;
+
+                    case "setRestrictedAreas": // Sperrflächen laden
+                        blockingPolygons.forEach(p => p.setMap(null));
+                        blockingPolygons = [];
+                        payload.forEach(area => {
+                            area.objects.forEach(obj => {
+                                const p = new google.maps.Polygon({
+                                    paths: obj.points.map(pt => ({ lat: parseFloat(pt.latitude), lng: parseFloat(pt.longitude) })),
+                                    strokeColor: "red", fillOpacity: 0.2, map: map
+                                });
+                                blockingPolygons.push(p);
+                            });
+                        });
+                        break;
+
+                    case "startDrawing": // Modus: "polyline", "polygon", "rectangle"
+                        drawingManager.setDrawingMode(payload.type);
+                        break;
+                    
+                    case "stopDrawing":
+                        drawingManager.setDrawingMode(null);
+                        break;
+
+                    case "clearNewShapes":
+                        allCreatedShapes.forEach(s => s.setMap(null));
+                        allCreatedShapes = [];
+                        break;
+
+                    case "setCenter":
+                        const loc = new google.maps.LatLng(payload.lat || payload.coord.lat, payload.lng || payload.coord.lng || payload.coord.long);
+                        map.setCenter(loc);
+                        if (payload.zoom) map.setZoom(payload.zoom);
+                        break;
+
+                    case "search":
+                        geocoder.geocode({ address: payload.formatted }, (res, status) => {
+                            if (status === "OK") {
+                                map.setCenter(res[0].geometry.location);
+                                if (searchMarker) searchMarker.setMap(null);
+                                searchMarker = new google.maps.Marker({ map, position: res[0].geometry.location });
+                                map.setZoom(17);
+                            }
+                        });
+                        break;
+                }
+            }
+        };
+
+        function renderProject(project) {
+            project.objects.forEach(obj => {
+                let mapObj;
+                const coords = obj.points.map(p => ({ lat: Number(p.latitude), lng: Number(p.longitude) }));
+                const color = project.color || 'blue';
+
+                if (obj.type === 'polyline') {
+                    mapObj = new google.maps.Polyline({ path: coords, strokeColor: color, strokeWeight: 3 });
+                } else if (obj.type === 'polygon' || obj.type === 'rectangle') {
+                    mapObj = new google.maps.Polygon({ paths: coords, fillColor: color, fillOpacity: 0.3, strokeColor: color });
+                }
+
+                if (mapObj) {
+                    mapObj.setMap(map);
+                    google.maps.event.addListener(mapObj, "click", (e) => {
+                        const content = `
+                            <div style="padding:10px; color:black;">
+                                <strong>${project.title}</strong><br>
+                                Status: ${project.status}<br>
+                                Bis: ${formatDate(project.ende)}<br><br>
+                                <button onclick="window.parent.postMessage({action:'navigate', id:'${project._id}'}, '*')">Details</button>
+                            </div>`;
+                        infoWindow.setContent(content);
+                        infoWindow.setPosition(e.latLng);
+                        infoWindow.open(map);
+                    });
+                    currentPolylines.push(mapObj);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
