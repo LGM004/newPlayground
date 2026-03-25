@@ -41,7 +41,8 @@
             setupWmsLayer();
             
             // Signal an Wix: "Ich bin bereit"
-            window.parent.postMessage({ action: "mapReady" }, "*");
+  
+    window.parent.postMessage({ action: "ready" }, "*");
         }
 
         function setupWmsLayer() {
