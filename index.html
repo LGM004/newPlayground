@@ -219,6 +219,7 @@
                 if (mapObj) {
                     mapObj.setMap(map);
                     google.maps.event.addListener(mapObj, "click", (e) => {
+                        debugger;
                         const content = `
                             <div style="padding:10px; color:black;">
                                 <strong>${project.title}</strong><br>
