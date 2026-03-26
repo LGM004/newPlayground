@@ -132,7 +132,7 @@
 
         // --- Message Handler (Wix Interaktion) ---
         window.onmessage = async (event) => {
-            debugger;
+            
 
 // 1. WICHTIG: Filtere Nachrichten, die nicht von dir kommen
     if (!event.data || (!event.data.actions && !event.data.action)) {
@@ -219,12 +219,12 @@
                 if (mapObj) {
                     mapObj.setMap(map);
                     google.maps.event.addListener(mapObj, "click", (e) => {
-                        debugger;
+                        
                         const content = `
                             <div style="padding:10px; color:black;">
-                                <strong>${project.title}</strong><br>
+                                <strong>${project.description}</strong><br>
                                 Status: ${project.status}<br>
-                                Bis: ${formatDate(project.ende)}<br><br>
+                                Bis: ${formatDate(project.endInstallation)}<br><br>
                                 <button onclick="window.parent.postMessage({action:'navigate', id:'${project._id}'}, '*')">Details</button>
                             </div>`;
                         infoWindow.setContent(content);
