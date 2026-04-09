@@ -121,11 +121,11 @@
             if (type === 'rectangle') {
                 const b = shape.getBounds();
                 return [
-                    { lat: b.getNorthEast().lat().toString(), longitude: b.getNorthEast().lng().toString() },
-                    { lat: b.getSouthWest().lat().toString(), longitude: b.getSouthWest().lng().toString() }
+                    { lat: b.getNorthEast().lat().toString(), long: b.getNorthEast().lng().toString() },
+                    { lat: b.getSouthWest().lat().toString(), long: b.getSouthWest().lng().toString() }
                 ];
             }
-            return shape.getPath().getArray().map(p => ({ lat: p.lat().toString(), longitude: p.lng().toString() }));
+            return shape.getPath().getArray().map(p => ({ lat: p.lat().toString(), long: p.lng().toString() }));
         }
 
         function formatDate(d) { return d ? new Date(d).toLocaleDateString("de-CH") : ""; }
