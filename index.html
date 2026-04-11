@@ -204,7 +204,7 @@
 case "openInfo":
 debugger;
                         
-    const wixId = payload.data;
+    const wixId = payload;
     
     // Finde das Objekt auf der Karte anhand der gespeicherten Wix-ID
     const targetShape = currentPolylines.find(shape => shape.projectId === wixId);
