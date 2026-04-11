@@ -200,6 +200,33 @@
                             }
                         });
                         break;
+
+case "openInfo":
+debugger;
+                        
+    const wixId = payload.data;
+    
+    // Finde das Objekt auf der Karte anhand der gespeicherten Wix-ID
+    const targetShape = currentPolylines.find(shape => shape.projectId === wixId);
+    
+    if (targetShape) {
+        // 1. Wir bestimmen einen Punkt für das Zentrieren (erster Punkt des Pfades)
+        const path = targetShape.getPath();
+        const firstPoint = path.getAt(0);
+        
+        // 2. Wir zentrieren die Karte sanft
+        map.panTo(firstPoint);
+        
+        // 3. WICHTIG: Wir feuern das 'click' Event manuell ab.
+        // Wir übergeben ein künstliches MouseEvent-Objekt mit der latLng, 
+        // damit das InfoWindow weiß, wo es aufploppen soll.
+        google.maps.event.trigger(targetShape, 'click', {
+            latLng: firstPoint
+        });
+    }
+    break;
+
+                        
                 }
             }
         };
