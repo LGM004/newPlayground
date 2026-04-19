@@ -29,7 +29,7 @@
         function initMap() {
             geocoder = new google.maps.Geocoder();
             infoWindow = new google.maps.InfoWindow();
-            
+             
             map = new google.maps.Map(document.getElementById("map"), {
                 center: { lat: 46.884, lng: 8.1336 },
                 zoom: 9,
@@ -245,6 +245,8 @@ case "openInfo":
 
                 if (mapObj) {
                     mapObj.setMap(map);
+                    // NEU: Speichere die ID direkt am Google Maps Objekt
+    mapObj.projectId = project._id;
                     google.maps.event.addListener(mapObj, "click", (e) => {
                         
                         const content = `
