@@ -151,6 +151,7 @@
 
         // --- Message Handler (Wix Interaktion) ---
         window.onmessage = async (event) => {
+            debugger;
             // Wix-interne System-Nachrichten filtern
             if (!event.data || (!event.data.actions && !event.data.action)) return; 
             
