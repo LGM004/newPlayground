@@ -35,11 +35,16 @@
                 center: { lat: 46.884, lng: 8.1336 },
                 zoom: 9,
                 mapTypeControl: true,
+                // NEU: Hier definieren wir, welche Buttons oben links zur Verfügung stehen
+                mapTypeControlOptions: {
+                    mapTypeIds: ["roadmap", "satellite", "hybrid", "terrain", "Kataster"],
+                    style: google.maps.MapTypeControlStyle.DROPDOWN_MENU // oder HORIZONTAL_BAR
+                },
                 styles: [{ featureType: "poi", stylers: [{ visibility: "off" }] }]
             });
 
-            setupDrawingManager();
             setupWmsLayer();
+            setupDrawingManager();
             
             // Signal an Wix: "Ich bin bereit"
             window.parent.postMessage({ action: "ready" }, "*");
@@ -61,7 +66,9 @@
                 name: "Kataster",
                 maxZoom: 20
             });
-            map.mapTypes.set("Landcover", landcover);
+            
+            // NEU: ID muss mit dem String in mapTypeIds ("Kataster") übereinstimmen
+            map.mapTypes.set("Kataster", landcover);
         }
 
         function setupDrawingManager() {
@@ -103,7 +110,6 @@
                 const newGeoJSON = googleToTurf(shape, type);
                 return blockingPolygons.some(block => {
                     const blockGeoJSON = googleToTurf(block, 'polygon');
-                    // turf.intersect gibt in v6 ein Feature oder null zurück
                     const match = turf.intersect(newGeoJSON, blockGeoJSON);
                     return match !== null;
                 });
@@ -151,7 +157,6 @@
 
         // --- Message Handler (Wix Interaktion) ---
         window.onmessage = async (event) => {
-            debugger;
             // Wix-interne System-Nachrichten filtern
             if (!event.data || (!event.data.actions && !event.data.action)) return; 
             
