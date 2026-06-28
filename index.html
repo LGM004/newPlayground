@@ -215,6 +215,7 @@
                         const lngVal = payload.lng || (payload.coord ? (payload.coord.lng || payload.coord.long) : 8.1336);
                         const loc = new google.maps.LatLng(latVal, lngVal);
                         map.setCenter(loc);
+                        debugger;
                         if (payload.zoom) map.setZoom(payload.zoom);
                         break;
 
