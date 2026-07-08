@@ -292,6 +292,21 @@
                 }
             });
         }
+
+        function captureMapForPDF() {
+    // Das Map-Div abfotografieren
+    html2canvas(document.getElementById("map"), {
+        useCORS: true, // Zwingend notwendig für Google Maps Tiles!
+        allowTaint: false
+    }).then(canvas => {
+        const base64Image = canvas.toDataURL("image/png");
+        // An Wix Velo senden
+        window.parent.postMessage({ 
+            action: "mapCaptured", 
+            imageData: base64Image 
+        }, "*");
+    });
+}
     </script>
 </body>
 </html>
