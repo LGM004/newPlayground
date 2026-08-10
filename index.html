@@ -185,7 +185,7 @@
                     // NEU: Nachdem die Linien gezeichnet wurden, starten wir die Generierung des Snapshots
                     triggerAutoCapture();
                     break;
-                case "setRestrictedAreas": 
+        case "setRestrictedAreas": 
                     blockingPolygons.forEach(p => p.setMap(null));
                     blockingPolygons = [];
                     if (Array.isArray(payload)) {
@@ -196,6 +196,33 @@
                                         paths: obj.points.map(pt => ({ lat: parseFloat(pt.latitude || pt.lat), lng: parseFloat(pt.longitude || pt.long || pt.lng) })),
                                         strokeColor: "red", strokeOpacity: 0.8, strokeWeight: 2, fillColor: "red", fillOpacity: 0.2, map: map
                                     });
+                                    
+                                    // --- NEU: Click-Listener für die gesperrte Fläche ---
+                                    google.maps.event.addListener(p, "click", (e) => {
+                                        // Hilfsfunktion zum Formatieren des ISO-Datums in CH-Format inkl. Zeit
+                                        const formatAreaDate = (isoString) => {
+                                            if (!isoString) return "?";
+                                            const d = new Date(isoString);
+                                            return d.toLocaleString("de-CH", {
+                                                day: "2-digit", month: "2-digit", year: "numeric",
+                                                hour: "2-digit", minute: "2-digit"
+                                            }) + " Uhr";
+                                        };
+                                        
+                                        const startStr = formatAreaDate(area.start);
+                                        const endStr = formatAreaDate(area.end);
+                                        
+                                        const content = `<div style="padding:10px; color:black; font-family:Arial,sans-serif; font-size:13px;">
+                                            gesperrte Fläche<br>
+                                            von <b>${startStr}</b><br>
+                                            bis <b>${endStr}</b>
+                                        </div>`;
+                                        
+                                        infoWindow.setContent(content);
+                                        infoWindow.setPosition(e.latLng); // Öffnet das Fenster genau dort, wo geklickt wurde
+                                        infoWindow.open(map);
+                                    });
+
                                     blockingPolygons.push(p);
                                 });
                             }
