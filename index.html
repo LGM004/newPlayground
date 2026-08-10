@@ -200,6 +200,7 @@
                                     // --- NEU: Click-Listener für die gesperrte Fläche ---
                                     google.maps.event.addListener(p, "click", (e) => {
                                         // Hilfsfunktion zum Formatieren des ISO-Datums in CH-Format inkl. Zeit
+                                        debugger;
                                         const formatAreaDate = (isoString) => {
                                             if (!isoString) return "?";
                                             const d = new Date(isoString);
@@ -208,7 +209,7 @@
                                                 hour: "2-digit", minute: "2-digit"
                                             }) + " Uhr";
                                         };
-                                        
+                                        debugger;
                                         const startStr = formatAreaDate(area.start);
                                         const endStr = formatAreaDate(area.end);
                                         
