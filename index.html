@@ -297,9 +297,12 @@
                 mapObj.projectId = project._id;
                 google.maps.event.addListener(mapObj, "click", (e) => {
                     const content = `<div style="padding:10px; color:black; font-family:Arial,sans-serif;">
+                     <strong style="font-size:14px;">${project.eventNumber || 'Keine Beschreibung'}</strong><br><br>
+                     <b>Gesuchsart:</b>Outdooranlass<br><br>
                         <strong style="font-size:14px;">${project.description || 'Keine Beschreibung'}</strong><br><br>
                         <b>Status:</b> ${project.status || 'Unbekannt'}<br>
-                        <b>Gültig bis:</b> ${formatDate(project.endInstallation)}<br><br>
+                        <b>Start:</b> ${formatDate(project.startInstallation)}<br><br>
+                        <b>Ende:</b> ${formatDate(project.endInstallation)}<br><br>
                         <button style="cursor:pointer; background:#3498db; color:white; border:none; padding:5px 10px; border-radius:3px;" onclick="window.parent.postMessage({action:'navigate', id:'${project._id}'}, '*')">Details anzeigen</button>
                     </div>`;
                     infoWindow.setContent(content);
