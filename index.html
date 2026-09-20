@@ -28,6 +28,10 @@
     let allCreatedShapes = [];
     let searchMarker = null;
     let config = { mode: 'OVERVIEW', role: 'GAST' };
+    // Status-String (z.B. "Gesuch 2. Instanz genehmigt") -> rgb(...)-Farbe, gesetzt
+    // über "setStatusColors" (aus der Tabelle "statuses"). Wird in renderProject()
+    // verwendet, um Gesuche auf der Karte je nach Status einzufärben.
+    let statusColors = {};
 
     function initMap() {
         geocoder = new google.maps.Geocoder();
@@ -200,6 +204,9 @@
                     config.mode = payload.mode;
                     config.role = payload.role;
                     break;
+                case "setStatusColors":
+                    statusColors = payload || {};
+                    break;
                 case "drawPolylines": 
                     currentPolylines.forEach(p => p.setMap(null));
                     currentPolylines = [];
@@ -332,7 +339,10 @@
         project.objects.forEach(obj => {
             let mapObj;
             const coords = obj.points.map(p => ({ lat: Number(p.latitude || p.lat), lng: Number(p.longitude || p.long || p.lng) }));
-            const color = project.color || '#3498db';
+            // Farbe je Gesuchsstatus (siehe "setStatusColors"); project.color als
+            // manueller Override, '#3498db' als letzter Fallback (z.B. für das eigene,
+            // noch nicht eingereichte "dummy"-Objekt beim Fortsetzen eines Entwurfs).
+            const color = statusColors[project.status] || project.color || '#3498db';
 
             if (obj.type === 'polyline') {
                 mapObj = new google.maps.Polyline({ path: coords, strokeColor: color, strokeWeight: 12 });
