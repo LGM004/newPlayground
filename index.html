@@ -21,6 +21,10 @@
     let map, drawingManager, infoWindow, geocoder;
     let currentPolylines = [];
     let blockingPolygons = [];
+    // Bereits bewilligte/abgeschlossene Gesuche im gleichen Zeitraum (siehe
+    // "setOtherRequests"): im Unterschied zu blockingPolygons blockieren diese das
+    // Zeichnen nicht, es gibt nur eine Warnung (requestOverlapDetected).
+    let otherRequestPolygons = [];
     let allCreatedShapes = [];
     let searchMarker = null;
     let config = { mode: 'OVERVIEW', role: 'GAST' };
@@ -106,22 +110,31 @@
         google.maps.event.addListener(drawingManager, 'overlaycomplete', (event) => {
             const newShape = event.overlay;
             const type = event.type;
-            if (checkCollision(newShape, type)) {
+            if (checkCollision(newShape, type, blockingPolygons)) {
                 newShape.setMap(null);
                 window.parent.postMessage({ action: "collisionDetected" }, "*");
                 return;
             }
+
+            // Überschneidung mit einem bewilligten/abgeschlossenen Gesuch blockiert das
+            // Zeichnen NICHT (anders als blockingPolygons oben) - nur eine Warnung.
+            const overlapsRequest = checkCollision(newShape, type, otherRequestPolygons);
+
             allCreatedShapes.push(newShape);
             const points = extractPoints(newShape, type);
             window.parent.postMessage({ action: "shapeCreated", type, points }, "*");
+
+            if (overlapsRequest) {
+                window.parent.postMessage({ action: "requestOverlapDetected" }, "*");
+            }
         });
     }
 
-    function checkCollision(shape, type) {
-        if (blockingPolygons.length === 0) return false;
+    function checkCollision(shape, type, polygons) {
+        if (!polygons || polygons.length === 0) return false;
         try {
             const newGeoJSON = googleToTurf(shape, type);
-            return blockingPolygons.some(block => {
+            return polygons.some(block => {
                 const blockGeoJSON = googleToTurf(block, 'polygon');
                 const match = turf.intersect(newGeoJSON, blockGeoJSON);
                 return match !== null;
@@ -164,6 +177,17 @@
 
     function formatDate(d) { return d ? new Date(d).toLocaleDateString("de-CH") : ""; }
 
+    // Formatiert ein ISO-Datum inkl. Zeit im CH-Format (z.B. für Sperrflächen- und
+    // Gesuchs-Tooltips auf der Karte).
+    function formatAreaDate(isoString) {
+        if (!isoString) return "?";
+        const d = new Date(isoString);
+        return d.toLocaleString("de-CH", {
+            day: "2-digit", month: "2-digit", year: "numeric",
+            hour: "2-digit", minute: "2-digit"
+        }) + " Uhr";
+    }
+
     window.onmessage = async (event) => {
         if (!event.data || (!event.data.actions && !event.data.action)) return; 
         const data = event.data;
@@ -199,17 +223,6 @@
                                     
                                     // --- NEU: Click-Listener für die gesperrte Fläche ---
                                     google.maps.event.addListener(p, "click", (e) => {
-                                        // Hilfsfunktion zum Formatieren des ISO-Datums in CH-Format inkl. Zeit
-                                        debugger;
-                                        const formatAreaDate = (isoString) => {
-                                            if (!isoString) return "?";
-                                            const d = new Date(isoString);
-                                            return d.toLocaleString("de-CH", {
-                                                day: "2-digit", month: "2-digit", year: "numeric",
-                                                hour: "2-digit", minute: "2-digit"
-                                            }) + " Uhr";
-                                        };
-                                        debugger;
                                         const startStr = formatAreaDate(area.start);
                                         const endStr = formatAreaDate(area.end);
                                         
@@ -230,7 +243,42 @@
                         });
                     }
                     break;
-                case "startDrawing": 
+                // Bereits bewilligte/abgeschlossene Gesuche im gleichen Zeitraum: nur Anzeige +
+                // Mouseover-Info (Gesuchsart + von/bis), kein Klick-Dialog. Blockieren das Zeichnen
+                // nicht (siehe checkCollision/requestOverlapDetected in overlaycomplete-Listener).
+                case "setOtherRequests":
+                    otherRequestPolygons.forEach(p => p.setMap(null));
+                    otherRequestPolygons = [];
+                    if (Array.isArray(payload)) {
+                        payload.forEach(req => {
+                            if (req.objects) {
+                                req.objects.forEach(obj => {
+                                    const coords = obj.points.map(pt => ({ lat: parseFloat(pt.latitude || pt.lat), lng: parseFloat(pt.longitude || pt.long || pt.lng) }));
+                                    const p = (obj.type === 'polyline')
+                                        ? new google.maps.Polyline({ path: coords, strokeColor: "orange", strokeOpacity: 0.8, strokeWeight: 9, map: map })
+                                        : new google.maps.Polygon({ paths: coords, strokeColor: "orange", strokeOpacity: 0.8, strokeWeight: 6, fillColor: "orange", fillOpacity: 0.2, map: map });
+
+                                    google.maps.event.addListener(p, "mouseover", (e) => {
+                                        const content = `<div style="padding:8px; color:black; font-family:Arial,sans-serif; font-size:13px;">
+                                            <b>Outdooranlass</b><br>
+                                            von <b>${formatAreaDate(req.startInstallation)}</b><br>
+                                            bis <b>${formatAreaDate(req.endInstallation)}</b>
+                                        </div>`;
+                                        infoWindow.setContent(content);
+                                        infoWindow.setPosition(e.latLng);
+                                        infoWindow.open(map);
+                                    });
+                                    google.maps.event.addListener(p, "mouseout", () => {
+                                        infoWindow.close();
+                                    });
+
+                                    otherRequestPolygons.push(p);
+                                });
+                            }
+                        });
+                    }
+                    break;
+                case "startDrawing":
                     if(drawingManager) drawingManager.setDrawingMode(payload.type);
                     break;
                 case "stopDrawing":
@@ -279,7 +327,7 @@
     };
 
     function renderProject(project) {
-      
+        debugger;
         if (!project.objects) return;
         project.objects.forEach(obj => {
             let mapObj;
