@@ -12,10 +12,51 @@
     <style>
         html, body, #map { height: 100%; margin: 0; padding: 0; font-family: Roboto, Arial, sans-serif; }
         #map { background-color: #e5e3df; }
+
+        /* Status-Legende: nur sichtbar, wenn "showLegend" empfangen wurde (aktuell
+           ausschliesslich von N-MapLinkGesuch.js gesendet), siehe renderLegend(). */
+        #mapLegend {
+            display: none;
+            position: fixed;
+            left: 16px;
+            bottom: 28px;
+            z-index: 20;
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+            padding: 14px 18px;
+            font-family: Roboto, Arial, sans-serif;
+            font-size: 13px;
+            color: #222;
+        }
+        #mapLegend .legend-title {
+            font-weight: 700;
+            font-size: 15px;
+            margin-bottom: 10px;
+        }
+        #mapLegend .legend-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 8px;
+        }
+        #mapLegend .legend-row:last-child { margin-bottom: 0; }
+        #mapLegend .legend-swatch {
+            width: 34px;
+            height: 18px;
+            border-radius: 3px;
+            border: 1.5px solid #3f51b5;
+            flex-shrink: 0;
+        }
     </style>
 </head>
 <body>
     <div id="map"></div>
+    <div id="mapLegend">
+        <div class="legend-title">Legende</div>
+        <div id="legendEntries"></div>
+    </div>
 
   <script>
     let map, drawingManager, infoWindow, geocoder;
@@ -32,6 +73,13 @@
     // über "setStatusColors" (aus der Tabelle "statuses"). Wird in renderProject()
     // verwendet, um Gesuche auf der Karte je nach Status einzufärben.
     let statusColors = {};
+    // Steuert, ob die Status-Legende (unten links über der Karte) angezeigt wird.
+    // googleMap.html ist in mehreren Seiten eingebettet (N-Outdooranlass-Gesuch.js,
+    // N-Restricted-Area.js, N-MapLinkGesuch.js) - die Legende soll aber NUR in der
+    // Kartenübersicht (N-MapLinkGesuch.js) erscheinen, daher explizites Opt-in über
+    // die Message-Action "showLegend" statt eines impliziten Nebeneffekts von
+    // "setStatusColors" (siehe renderLegend()).
+    let legendEnabled = false;
 
     function initMap() {
         geocoder = new google.maps.Geocoder();
@@ -206,6 +254,11 @@
                     break;
                 case "setStatusColors":
                     statusColors = payload || {};
+                    renderLegend();
+                    break;
+                case "showLegend":
+                    legendEnabled = true;
+                    renderLegend();
                     break;
                 case "drawPolylines": 
                     currentPolylines.forEach(p => p.setMap(null));
@@ -333,8 +386,36 @@
         }
     };
 
+    // Baut die Status-Legende (unten links über der Karte) aus statusColors auf;
+    // tut nichts, solange legendEnabled nicht per "showLegend" gesetzt wurde.
+    // Sperrfläche ist kein Eintrag der Tabelle "statuses" (eigener, fest roter
+    // Kartentyp, siehe "setRestrictedAreas") und wird daher separat angehängt.
+    function renderLegend() {
+        if (!legendEnabled) return;
+        const container = document.getElementById('legendEntries');
+        const legendBox = document.getElementById('mapLegend');
+        if (!container || !legendBox) return;
+
+        container.innerHTML = '';
+
+        Object.entries(statusColors).forEach(([status, color]) => {
+            if (!color) return;
+            const row = document.createElement('div');
+            row.className = 'legend-row';
+            row.innerHTML = `<span>${status}</span><span class="legend-swatch" style="background:${color};"></span>`;
+            container.appendChild(row);
+        });
+
+        const sperrflaecheRow = document.createElement('div');
+        sperrflaecheRow.className = 'legend-row';
+        sperrflaecheRow.innerHTML = '<span>Sperrfläche</span><span class="legend-swatch" style="background:red;"></span>';
+        container.appendChild(sperrflaecheRow);
+
+        legendBox.style.display = 'block';
+    }
+
     function renderProject(project) {
-        debugger;
+      
         if (!project.objects) return;
         project.objects.forEach(obj => {
             let mapObj;
