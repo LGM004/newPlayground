@@ -49,12 +49,36 @@
             border: 1.5px solid #3f51b5;
             flex-shrink: 0;
         }
+        /* Umschalter Farbgebung "Status | Gesuchsart" (siehe setColorMode()). Nur
+           sichtbar, sobald Gesuchsarten über "setRequestTypes" bekannt sind. */
+        #legendModeSwitch {
+            display: none;
+            margin-bottom: 10px;
+            border: 1px solid #c5cae9;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        #legendModeSwitch button {
+            border: none;
+            background: #ffffff;
+            color: #3f51b5;
+            padding: 4px 10px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        #legendModeSwitch button.active {
+            background: #3f51b5;
+            color: #ffffff;
+        }
     </style>
 </head>
 <body>
     <div id="map"></div>
     <div id="mapLegend">
         <div class="legend-title">Legende</div>
+        <div id="legendModeSwitch">
+            <button type="button" data-mode="status" class="active" onclick="setColorMode('status')">Status</button><button type="button" data-mode="requestType" onclick="setColorMode('requestType')">Gesuchsart</button>
+        </div>
         <div id="legendEntries"></div>
     </div>
 
@@ -80,6 +104,12 @@
     // die Message-Action "showLegend" statt eines impliziten Nebeneffekts von
     // "setStatusColors" (siehe renderLegend()).
     let legendEnabled = false;
+    // Gesuchsart-id (requestTypes.id) -> { name, color }, gesetzt über
+    // "setRequestTypes" (aus der Tabelle "requestTypes", Spalte rgbColor).
+    let requestTypes = {};
+    // Farbgebung der Gesuche: 'status' (statusColors) oder 'requestType'
+    // (requestTypes), umschaltbar über #legendModeSwitch in der Legende.
+    let colorMode = 'status';
 
     function initMap() {
         geocoder = new google.maps.Geocoder();
@@ -256,6 +286,10 @@
                     statusColors = payload || {};
                     renderLegend();
                     break;
+                case "setRequestTypes":
+                    requestTypes = payload || {};
+                    renderLegend();
+                    break;
                 case "showLegend":
                     legendEnabled = true;
                     renderLegend();
@@ -386,23 +420,58 @@
         }
     };
 
-    // Baut die Status-Legende (unten links über der Karte) aus statusColors auf;
-    // tut nichts, solange legendEnabled nicht per "showLegend" gesetzt wurde.
-    // Sperrfläche ist kein Eintrag der Tabelle "statuses" (eigener, fest roter
-    // Kartentyp, siehe "setRestrictedAreas") und wird daher separat angehängt.
+    // Farbe eines Gesuchs je nach aktivem colorMode; project.color als manueller
+    // Override, '#3498db' als letzter Fallback (z.B. für das eigene, noch nicht
+    // eingereichte "dummy"-Objekt beim Fortsetzen eines Entwurfs).
+    function getProjectColor(project) {
+        const modeColor = colorMode === 'requestType'
+            ? requestTypes[project.requestTypeId]?.color
+            : statusColors[project.status];
+        return modeColor || project.color || '#3498db';
+    }
+
+    // Umschalten der Farbgebung (Buttons in #legendModeSwitch): Legende neu aufbauen
+    // und bereits gezeichnete Gesuche umfärben (ohne erneutes "drawPolylines").
+    function setColorMode(mode) {
+        colorMode = mode;
+        document.querySelectorAll('#legendModeSwitch button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+        renderLegend();
+        currentPolylines.forEach(mapObj => {
+            if (!mapObj.project) return;
+            const color = getProjectColor(mapObj.project);
+            mapObj.setOptions(typeof mapObj.getPaths === 'function'
+                ? { fillColor: color, strokeColor: color }
+                : { strokeColor: color });
+        });
+    }
+
+    // Baut die Legende (unten links über der Karte) je nach colorMode aus
+    // statusColors bzw. requestTypes auf; tut nichts, solange legendEnabled nicht
+    // per "showLegend" gesetzt wurde. Sperrfläche ist weder Status noch Gesuchsart
+    // (eigener, fest roter Kartentyp, siehe "setRestrictedAreas") und wird daher
+    // in beiden Modi separat angehängt.
     function renderLegend() {
         if (!legendEnabled) return;
         const container = document.getElementById('legendEntries');
         const legendBox = document.getElementById('mapLegend');
         if (!container || !legendBox) return;
 
+        const hasRequestTypes = Object.keys(requestTypes).length > 0;
+        document.getElementById('legendModeSwitch').style.display = hasRequestTypes ? 'inline-flex' : 'none';
+
         container.innerHTML = '';
 
-        Object.entries(statusColors).forEach(([status, color]) => {
+        const entries = colorMode === 'requestType'
+            ? Object.values(requestTypes).map(rt => [rt.name, rt.color])
+            : Object.entries(statusColors);
+
+        entries.forEach(([label, color]) => {
             if (!color) return;
             const row = document.createElement('div');
             row.className = 'legend-row';
-            row.innerHTML = `<span>${status}</span><span class="legend-swatch" style="background:${color};"></span>`;
+            row.innerHTML = `<span>${label}</span><span class="legend-swatch" style="background:${color};"></span>`;
             container.appendChild(row);
         });
 
@@ -420,10 +489,8 @@
         project.objects.forEach(obj => {
             let mapObj;
             const coords = obj.points.map(p => ({ lat: Number(p.latitude || p.lat), lng: Number(p.longitude || p.long || p.lng) }));
-            // Farbe je Gesuchsstatus (siehe "setStatusColors"); project.color als
-            // manueller Override, '#3498db' als letzter Fallback (z.B. für das eigene,
-            // noch nicht eingereichte "dummy"-Objekt beim Fortsetzen eines Entwurfs).
-            const color = statusColors[project.status] || project.color || '#3498db';
+            // Farbe je Status bzw. Gesuchsart, siehe getProjectColor()/setColorMode().
+            const color = getProjectColor(project);
 
             if (obj.type === 'polyline') {
                 mapObj = new google.maps.Polyline({ path: coords, strokeColor: color, strokeWeight: 12 });
@@ -434,10 +501,12 @@
             if (mapObj) {
                 mapObj.setMap(map);
                 mapObj.projectId = project._id;
+                mapObj.project = project; // für das Umfärben in setColorMode()
                 google.maps.event.addListener(mapObj, "click", (e) => {
+                    const requestTypeName = requestTypes[project.requestTypeId]?.name || 'Outdooranlass';
                     const content = `<div style="padding:10px; color:black; font-family:Arial,sans-serif;">
                      <strong style="font-size:14px;">${project.eventNumber || 'Keine Beschreibung'}</strong><br>
-                     <b>Gesuchsart:</b>Outdooranlass<br>
+                     <b>Gesuchsart:</b> ${requestTypeName}<br>
                         <strong style="font-size:14px;">${project.description || 'Keine Beschreibung'}</strong><br>
                         <b>Status:</b> ${project.status || 'Unbekannt'}<br>
                         <b>Start:</b> ${formatDate(project.startInstallation)}<br>
