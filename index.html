@@ -282,13 +282,6 @@
                     config.mode = payload.mode;
                     config.role = payload.role;
                     break;
-                // Steuert, ob im Info-Fenster eines Gesuchs (renderProject) der
-                // Duplizieren-Button erscheint - gesendet von N-MapLinkGesuch.js,
-                // analog zu buttonDuplicate im repeaterRequests (nur sichtbar, wenn
-                // die Person auch ein neues Gesuch anlegen darf).
-                case "setPermissions":
-                    config.canDuplicate = !!(payload && payload.canDuplicate);
-                    break;
                 case "setStatusColors":
                     statusColors = payload || {};
                     renderLegend();
@@ -511,11 +504,12 @@
                 mapObj.project = project; // für das Umfärben in setColorMode()
                 google.maps.event.addListener(mapObj, "click", (e) => {
                     const requestTypeName = requestTypes[project.requestTypeId]?.name || 'Outdooranlass';
-                    // Duplizieren-Button (⧉): nur wenn die Person laut Wix-Seite auch ein
-                    // neues Gesuch anlegen darf (siehe "setPermissions"), analog zu
-                    // buttonDuplicate im repeaterRequests - verhaelt sich genauso: öffnet
-                    // das Erfassungsformular mit den Daten dieses Gesuchs vorausgefuellt.
-                    const duplicateButton = config.canDuplicate
+                    // Duplizieren-Button (⧉): nur fuer eigene, selbst angelegte Gesuche
+                    // (project.canDuplicate, siehe toMapResults in N-MapLinkGesuch.js),
+                    // analog zu buttonDuplicate im repeaterRequests - verhaelt sich
+                    // genauso: öffnet das Erfassungsformular mit den Daten dieses
+                    // Gesuchs vorausgefuellt.
+                    const duplicateButton = project.canDuplicate
                         ? `<button style="cursor:pointer; background:#ffffff; color:#3498db; border:1px solid #3498db; padding:5px 10px; border-radius:3px; margin-left:6px;" title="Gesuch duplizieren" onclick="window.parent.postMessage({action:'duplicate', id:'${project._id}'}, '*')">⧉ Duplizieren</button>`
                         : '';
                     const content = `<div style="padding:10px; color:black; font-family:Arial,sans-serif;">
