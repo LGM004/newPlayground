@@ -282,6 +282,13 @@
                     config.mode = payload.mode;
                     config.role = payload.role;
                     break;
+                // Steuert, ob im Info-Fenster eines Gesuchs (renderProject) der
+                // Duplizieren-Button erscheint - gesendet von N-MapLinkGesuch.js,
+                // analog zu buttonDuplicate im repeaterRequests (nur sichtbar, wenn
+                // die Person auch ein neues Gesuch anlegen darf).
+                case "setPermissions":
+                    config.canDuplicate = !!(payload && payload.canDuplicate);
+                    break;
                 case "setStatusColors":
                     statusColors = payload || {};
                     renderLegend();
@@ -504,6 +511,13 @@
                 mapObj.project = project; // für das Umfärben in setColorMode()
                 google.maps.event.addListener(mapObj, "click", (e) => {
                     const requestTypeName = requestTypes[project.requestTypeId]?.name || 'Outdooranlass';
+                    // Duplizieren-Button (⧉): nur wenn die Person laut Wix-Seite auch ein
+                    // neues Gesuch anlegen darf (siehe "setPermissions"), analog zu
+                    // buttonDuplicate im repeaterRequests - verhaelt sich genauso: öffnet
+                    // das Erfassungsformular mit den Daten dieses Gesuchs vorausgefuellt.
+                    const duplicateButton = config.canDuplicate
+                        ? `<button style="cursor:pointer; background:#ffffff; color:#3498db; border:1px solid #3498db; padding:5px 10px; border-radius:3px; margin-left:6px;" title="Gesuch duplizieren" onclick="window.parent.postMessage({action:'duplicate', id:'${project._id}'}, '*')">⧉ Duplizieren</button>`
+                        : '';
                     const content = `<div style="padding:10px; color:black; font-family:Arial,sans-serif;">
                      <strong style="font-size:14px;">${project.eventNumber || 'Keine Beschreibung'}</strong><br>
                      <b>Gesuchsart:</b> ${requestTypeName}<br>
@@ -511,7 +525,7 @@
                         <b>Status:</b> ${project.status || 'Unbekannt'}<br>
                         <b>Start:</b> ${formatDate(project.startInstallation)}<br>
                         <b>Ende:</b> ${formatDate(project.endInstallation)}<br><br>
-                        <button style="cursor:pointer; background:#3498db; color:white; border:none; padding:5px 10px; border-radius:3px;" onclick="window.parent.postMessage({action:'navigate', id:'${project._id}'}, '*')">Details anzeigen</button>
+                        <button style="cursor:pointer; background:#3498db; color:white; border:none; padding:5px 10px; border-radius:3px;" onclick="window.parent.postMessage({action:'navigate', id:'${project._id}'}, '*')">Details anzeigen</button>${duplicateButton}
                     </div>`;
                     infoWindow.setContent(content);
                     infoWindow.setPosition(e.latLng);
